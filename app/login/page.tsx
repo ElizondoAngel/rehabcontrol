@@ -1,32 +1,34 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleLogin(formData: FormData) {
     setLoading(true)
     setError('')
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: formData.get('email'),
+        password: formData.get('password'),
+      }),
+      headers: { 'Content-Type': 'application/json' },
+    })
 
-    if (error) {
-      setError('Credenciales incorrectas. Verifica tu correo y contraseña.')
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error ?? 'Credenciales incorrectas.')
       setLoading(false)
       return
     }
 
-    // El middleware redirige al dashboard según el rol
-    router.refresh()
+    // Redirigir al dashboard según el rol
+    window.location.href = `/${data.rol}/dashboard`
   }
 
   return (
@@ -37,17 +39,22 @@ export default function LoginPage() {
           <p className="text-sm text-gray-500 mt-1">Sistema de gestión clínica</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            handleLogin(new FormData(e.currentTarget))
+          }}
+          className="space-y-4"
+        >
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
               Correo electrónico
             </label>
             <input
               id="email"
+              name="email"
               type="email"
               required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
               placeholder="tu@correo.com"
             />
@@ -59,10 +66,9 @@ export default function LoginPage() {
             </label>
             <input
               id="password"
+              name="password"
               type="password"
               required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
               placeholder="••••••••"
             />
