@@ -7,6 +7,46 @@ export default async function SecretariaDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const hoy = new Date().toISOString().split('T')[0]
+  const inicioHoy = `${hoy}T00:00:00`
+  const finHoy    = `${hoy}T23:59:59`
+
+  // ── Citas de hoy con paciente, terapeuta y pago relacionado ────
+  const { data: citasHoy } = await supabase
+    .from('citas')
+    .select(`*, pacientes(nombre_completo), profiles!citas_terapeuta_id_fkey(nombre_completo), pagos(monto, estado_pago, metodo_pago)`)
+    .gte('fecha_hora', inicioHoy)
+    .lte('fecha_hora', finHoy)
+    .order('fecha_hora', { ascending: true })
+
+  // ── Conteo de pacientes activos ────────────────────────────────
+  const { count: pacientesActivos } = await supabase
+    .from('pacientes')
+    .select('*', { count: 'exact', head: true })
+    .eq('activo', true)
+
+  // ── Terapeutas activos ──────────────────────────────────────────
+  const { count: terapeutasActivos } = await supabase
+    .from('profiles')
+    .select('*', { count: 'exact', head: true })
+    .eq('rol', 'terapeuta')
+    .eq('activo', true)
+
+  // ── Pagos pendientes (global) ───────────────────────────────────
+  const { data: pagosPendientes } = await supabase
+    .from('pagos')
+    .select('monto')
+    .eq('estado_pago', 'pendiente')
+
+  const citas = citasHoy ?? []
+  const citasConfirmadas = citas.filter(c => c.estado === 'programada' || c.estado === 'completada').length
+  const totalPagosPendientes = pagosPendientes?.length ?? 0
+  const terapeutasEnAgendaHoy = new Set(citas.map(c => c.terapeuta_id)).size
+
+  const ESTADO_LABELS: Record<string,string> = { programada:'Programada', completada:'Completada', cancelada:'Cancelada', no_asistio:'No asistió' }
+  const ESTADO_CLASS:  Record<string,string> = { programada:'b-blue', completada:'b-green', cancelada:'b-red', no_asistio:'b-amber' }
+  const METODO_LABELS: Record<string,string> = { efectivo:'Efectivo', transferencia:'Transferencia', tarjeta:'Tarjeta', aseguradora:'Aseguradora' }
+
   return (
     <>
       <style>{`
@@ -88,14 +128,14 @@ export default async function SecretariaDashboard() {
         </div>
         <nav className="sb-nav">
           {[
-            {icon:'🏠', label:'Panel',           active:true},
-            {icon:'📅', label:'Agenda General',  active:false},
-            {icon:'👥', label:'Pacientes',        active:false},
-            {icon:'💳', label:'Pagos',            active:false},
+            {icon:'🏠', label:'Panel',           href:'/secretaria/dashboard', active:true},
+            {icon:'📅', label:'Agenda General',  href:'/secretaria/citas',     active:false},
+            {icon:'👥', label:'Pacientes',        href:'/secretaria/pacientes', active:false},
+            {icon:'💳', label:'Pagos',            href:'/secretaria/pagos',     active:false},
           ].map(n => (
-            <a key={n.label} href="#" className={n.active?'active':''}>
+            <Link key={n.label} href={n.href} className={n.active?'active':''}>
               <span className="sb-nav-icon">{n.icon}</span>{n.label}
-            </a>
+            </Link>
           ))}
         </nav>
         <div className="sb-bottom">
@@ -117,10 +157,10 @@ export default async function SecretariaDashboard() {
 
           <div className="metrics">
             {[
-              {label:'Citas hoy',             num:'5',  sub:'3 confirmadas',  icon:'📅', cls:'icon-purple'},
-              {label:'Pagos pendientes',      num:'2',  sub:'por cobrar hoy', icon:'💳', cls:'icon-amber'},
-              {label:'Pacientes registrados', num:'48', sub:'base total',     icon:'👥', cls:'icon-green'},
-              {label:'Terapeutas activos',    num:'3',  sub:'en agenda hoy',  icon:'📈', cls:'icon-blue'},
+              {label:'Citas hoy',             num:String(citas.length),  sub:`${citasConfirmadas} confirmadas`,        icon:'📅', cls:'icon-purple'},
+              {label:'Pagos pendientes',      num:String(totalPagosPendientes),  sub:'por cobrar',                     icon:'💳', cls:'icon-amber'},
+              {label:'Pacientes activos',     num:String(pacientesActivos ?? 0), sub:'base actual',                    icon:'👥', cls:'icon-green'},
+              {label:'Terapeutas activos',    num:String(terapeutasActivos ?? 0), sub:`${terapeutasEnAgendaHoy} en agenda hoy`, icon:'📈', cls:'icon-blue'},
             ].map(m => (
               <div className="metric" key={m.label}>
                 <div className="metric-label">{m.label}</div>
@@ -134,27 +174,36 @@ export default async function SecretariaDashboard() {
           <div className="table-card">
             <div className="table-header">
               <span className="table-title">Agenda de hoy</span>
-              <button className="btn-new">+ Nueva cita</button>
+              <Link href="/secretaria/citas" className="btn-new" style={{textDecoration:'none',display:'inline-block'}}>+ Nueva cita</Link>
             </div>
-            {[
-              {time:'08:00', name:'Roberto Fuentes', doc:'Dra. Moreno',  cita:'confirmada', pago:'Pagado'},
-              {time:'09:30', name:'Claudia Vázquez', doc:'Dr. Ramírez',  cita:'confirmada', pago:'Pendiente'},
-              {time:'11:00', name:'Mario Espinoza',  doc:'Dra. Moreno',  cita:'pendiente',  pago:'Pagado'},
-              {time:'14:00', name:'Lucía Herrera',   doc:'Dr. Ramírez',  cita:'confirmada', pago:'Pendiente'},
-              {time:'16:30', name:'Ana Pérez',       doc:'Dra. Moreno',  cita:'cancelada',  pago:'Pendiente'},
-            ].map((r,i) => (
-              <div className="agenda-row" key={i}>
-                <div className="ag-time">{r.time}</div>
-                <div className="ag-info">
-                  <div className="ag-name">{r.name}</div>
-                  <div className="ag-doc">{r.doc}</div>
-                </div>
-                <div className="ag-badges">
-                  <span className={`badge ${r.cita==='confirmada'?'b-green':r.cita==='cancelada'?'b-red':'b-amber'}`}>{r.cita}</span>
-                  <span className={`badge ${r.pago==='Pagado'?'b-blue':'b-amber'}`}>{r.pago}</span>
-                </div>
+            {citas.length === 0 && (
+              <div style={{padding:'40px 0', textAlign:'center', color:'rgba(232,245,238,0.4)', fontSize:14}}>
+                No hay citas programadas para hoy
               </div>
-            ))}
+            )}
+            {citas.map((c:any) => {
+              const hora = new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:false })
+              const pago = c.pagos?.[0]
+              return (
+                <div className="agenda-row" key={c.id_cita}>
+                  <div className="ag-time">{hora}</div>
+                  <div className="ag-info">
+                    <div className="ag-name">{c.pacientes?.nombre_completo ?? '—'}</div>
+                    <div className="ag-doc">{c.profiles?.nombre_completo ?? '—'}</div>
+                  </div>
+                  <div className="ag-badges">
+                    <span className={`badge ${ESTADO_CLASS[c.estado]}`}>{ESTADO_LABELS[c.estado]}</span>
+                    {pago ? (
+                      <span className={`badge ${pago.estado_pago==='pagado'?'b-blue':'b-amber'}`}>
+                        {pago.estado_pago==='pagado' ? `Pagado · ${METODO_LABELS[pago.metodo_pago]}` : 'Pendiente'}
+                      </span>
+                    ) : (
+                      <span className="badge b-amber" style={{opacity:0.5}}>Sin pago</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

@@ -618,7 +618,9 @@ export default function LandingPage() {
               <label className="form-label">Mensaje</label>
               <textarea className="form-textarea" placeholder="Cuéntanos sobre tu clínica y lo que necesitas..." />
             </div>
-            <button className="form-submit">Enviar solicitud →</button>
+            <Link href="/login" passHref>
+              <button className="form-submit" >Enviar solicitud →</button>
+            </Link>
           </div>
         </div>
       </section>
