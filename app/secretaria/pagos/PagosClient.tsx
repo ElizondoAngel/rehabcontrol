@@ -47,16 +47,17 @@ function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onC
   return (
     <div style={{
       position:'fixed', bottom:90, right:28, zIndex:200,
-      background: type==='success' ? '#162419' : '#1a0f0f',
-      border: `1px solid ${type==='success' ? 'rgba(26,144,104,0.4)' : 'rgba(224,68,68,0.4)'}`,
-      borderLeft: `3px solid ${type==='success' ? '#1A9068' : '#E04444'}`,
+      background: type==='success' ? 'rgba(52,211,153,0.10)' : 'rgba(242,85,85,0.10)',
+      border: `1px solid ${type==='success' ? 'rgba(52,211,153,0.35)' : 'rgba(242,85,85,0.35)'}`,
+      borderLeft: `3px solid ${type==='success' ? '#34D399' : '#F25555'}`,
       borderRadius:12, padding:'14px 18px', minWidth:280, maxWidth:380,
       display:'flex', alignItems:'center', gap:12,
-      boxShadow:'0 8px 32px rgba(0,0,0,0.4)', animation:'slideUp .3s ease',
+      backdropFilter:'blur(16px)',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.5)', animation:'slideUp .3s ease',
     }}>
       <span style={{fontSize:18}}>{type==='success'?'✅':'❌'}</span>
-      <span style={{fontSize:14, color:'#E8F5EE', flex:1}}>{msg}</span>
-      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(232,245,238,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
+      <span style={{fontSize:14, color:'#E7EDF7', flex:1}}>{msg}</span>
+      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(231,237,247,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
     </div>
   )
 }
@@ -64,7 +65,7 @@ function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onC
 function Loader() {
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 0'}}>
-      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(26,144,104,0.2)',borderTopColor:'#1A9068',animation:'spin .7s linear infinite'}}/>
+      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(56,189,248,0.2)',borderTopColor:'#38BDF8',animation:'spin .7s linear infinite'}}/>
     </div>
   )
 }
@@ -78,6 +79,9 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
   const [confirmCobro, setConfirmCobro] = useState<Pago|null>(null)
   const [metodoCobro, setMetodoCobro] = useState<string>('efectivo')
   const [modalNuevo, setModalNuevo] = useState(false)
+  const [modalEditar, setModalEditar] = useState<Pago|null>(null)
+  const [confirmReembolso, setConfirmReembolso] = useState<Pago|null>(null)
+  const [motivoReembolso, setMotivoReembolso] = useState('')
   const [errores, setErrores] = useState<Record<string,string>>({})
 
   // ── TOTALES DINÁMICOS — recalculados con cada cambio de estado ─
@@ -153,129 +157,187 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
     setErrores({})
   }
 
+  // ── EDITAR PAGO (monto / método) ──────────────────────────────
+  async function editarPago(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!modalEditar) return
+    const fd = new FormData(e.currentTarget)
+    const monto = fd.get('monto') as string
+    const metodo_pago = fd.get('metodo_pago') as string
+
+    const errs: Record<string,string> = {}
+    if (!monto || Number(monto) <= 0) errs.monto = 'Indica un monto válido'
+    if (!metodo_pago) errs.metodo_pago = 'Selecciona un método'
+    if (Object.keys(errs).length > 0) { setErrores(errs); return }
+
+    setLoading(true)
+    const res = await fetch('/api/pagos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: modalEditar.id_pago, monto: Number(monto), metodo_pago }),
+    })
+    setLoading(false)
+    if (res.ok) {
+      setPagos(prev => prev.map(p => p.id_pago === modalEditar.id_pago ? { ...p, monto: Number(monto), metodo_pago: metodo_pago as Pago['metodo_pago'] } : p))
+      setToast({ msg: 'Pago actualizado correctamente', type: 'success' })
+      setModalEditar(null)
+      setErrores({})
+    } else {
+      setToast({ msg: 'Error al actualizar el pago', type: 'error' })
+    }
+  }
+
+  // ── REEMBOLSAR PAGO ────────────────────────────────────────────
+  async function reembolsarPago() {
+    if (!confirmReembolso) return
+    setLoading(true)
+    const res = await fetch('/api/pagos', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: confirmReembolso.id_pago, estado_pago: 'reembolsado', motivo: motivoReembolso }),
+    })
+    setLoading(false)
+    if (res.ok) {
+      setPagos(prev => prev.map(p => p.id_pago === confirmReembolso.id_pago ? { ...p, estado_pago: 'reembolsado' } : p))
+      setToast({ msg: 'Pago marcado como reembolsado', type: 'success' })
+    } else {
+      setToast({ msg: 'Error al registrar el reembolso', type: 'error' })
+    }
+    setConfirmReembolso(null)
+    setMotivoReembolso('')
+  }
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
-          --bg:#0D1A12;--sidebar:#111D16;--card:#162419;--border:rgba(255,255,255,0.07);
-          --mid:#1A9068;--light:#4FC49A;--pale:#DCF2E9;--text:#E8F5EE;--muted:rgba(232,245,238,0.45);
-          --red:#E04444;--amber:#F5B400;--blue:#378ADD;
+          --bg:#060B14;--sidebar:#0A1220;--card:rgba(255,255,255,0.035);--card-border:rgba(255,255,255,0.09);
+          --border:rgba(255,255,255,0.09);--surface2:rgba(255,255,255,0.07);
+          --blue:#2563EB;--blue-2:#3B82F6;--cyan:#38BDF8;
+          --text:#E7EDF7;--muted:#8C9BB5;
+          --red:#F25555;--amber:#F5B400;--green:#34D399;--purple:#A78BFA;
         }
-        body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
+        body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
 
         .sidebar{width:260px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
         .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
         .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:36px;height:36px;border-radius:9px;background:var(--mid);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff}
-        .sb-name{font-size:14px;font-weight:600;color:var(--text)}
+        .sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;box-shadow:0 0 18px rgba(56,189,248,0.3)}
+        .sb-name{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
         .sb-ver{font-size:10px;color:var(--muted)}
-        .sb-role{margin:12px 12px 4px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:32px;height:32px;border-radius:8px;background:rgba(127,119,221,0.15);border:1px solid rgba(127,119,221,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-        .sb-role-name{font-size:13px;font-weight:500;color:var(--text)}
-        .sb-role-sub{font-size:11px;color:#7F77DD}
+        .sb-role{margin:12px 12px 4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
+        .sb-role-icon{width:32px;height:32px;border-radius:9px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+        .sb-role-name{font-size:13px;font-weight:600;color:var(--text)}
+        .sb-role-sub{font-size:11px;color:var(--cyan)}
         .sb-nav{flex:1;padding:8px 10px}
-        .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--muted);text-decoration:none;transition:all .18s;margin-bottom:2px}
-        .sb-nav a:hover{background:rgba(255,255,255,0.05);color:var(--text)}
-        .sb-nav a.active{background:rgba(26,144,104,0.15);color:var(--light)}
+        .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .18s;margin-bottom:2px}
+        .sb-nav a:hover{background:var(--surface2);color:var(--text)}
+        .sb-nav a.active{background:linear-gradient(135deg,rgba(37,99,235,0.18),rgba(56,189,248,0.12));color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(56,189,248,0.2)}
         .sb-nav-icon{font-size:16px;width:20px;text-align:center}
         .sb-bottom{padding:12px 10px;border-top:1px solid var(--border)}
-        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--muted);text-decoration:none}
+        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .18s}
         .sb-bottom a:hover{color:var(--red)}
 
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
         .topbar{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0}
-        .topbar-title{font-size:14px;color:var(--muted)}
+        .topbar-title{font-size:14px;color:var(--muted);font-weight:500}
         .topbar-right{display:flex;align-items:center;gap:16px}
-        .online-dot{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--light)}
-        .dot{width:7px;height:7px;border-radius:50%;background:var(--light)}
-        .notif{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
+        .online-dot{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cyan);font-weight:500}
+        .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+        .notif{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .18s}
+        .notif:hover{background:var(--surface2)}
         .content{flex:1;overflow-y:auto;padding:28px}
 
         .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
-        .page-title{font-size:26px;font-weight:600;color:var(--text)}
+        .page-title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:-0.015em}
         .page-sub{font-size:14px;color:var(--muted);margin-top:4px}
-        .btn-nuevo{background:var(--mid);color:#fff;border:none;border-radius:10px;padding:11px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:7px;transition:background .2s,transform .15s}
-        .btn-nuevo:hover{background:#158057;transform:translateY(-1px)}
+        .btn-nuevo{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;border:none;border-radius:11px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:7px;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 18px rgba(37,99,235,0.32)}
+        .btn-nuevo:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(56,189,248,0.4)}
 
         /* TOTALES */
         .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-        .stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
-        .stat-label{font-size:12px;color:var(--muted);margin-bottom:10px}
-        .stat-num{font-size:26px;font-weight:600;color:var(--text);line-height:1;transition:color .3s}
-        .stat-icon{position:absolute;top:16px;right:16px;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
-        .icon-green{background:rgba(26,144,104,0.15)}
+        .stat-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
+        .stat-card:hover{border-color:rgba(56,189,248,0.3);transform:translateY(-2px)}
+        .stat-label{font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500}
+        .stat-num{font-size:26px;font-weight:800;color:var(--text);line-height:1;transition:color .3s;letter-spacing:-0.01em}
+        .stat-icon{position:absolute;top:16px;right:16px;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px}
+        .icon-green{background:rgba(52,211,153,0.15)}
         .icon-amber{background:rgba(245,180,0,0.15)}
-        .icon-blue{background:rgba(55,138,221,0.15)}
-        .icon-purple{background:rgba(127,119,221,0.15)}
+        .icon-blue{background:rgba(56,189,248,0.15)}
+        .icon-purple{background:rgba(167,139,250,0.15)}
 
         /* FILTROS */
         .filters{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
         .search-wrap{flex:1;min-width:220px;position:relative}
         .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
-        .search-input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px 10px 34px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;transition:border-color .2s}
-        .search-input:focus{border-color:var(--mid)}
+        .search-input{width:100%;background:var(--card);border:1px solid var(--card-border);border-radius:10px;padding:10px 12px 10px 34px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:border-color .2s}
+        .search-input:focus{border-color:var(--cyan)}
         .search-input::placeholder{color:var(--muted)}
-        .filter-tab{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:13px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .18s}
-        .filter-tab:hover{border-color:rgba(26,144,104,0.4);color:var(--text)}
-        .filter-tab.active{background:rgba(26,144,104,0.15);border-color:rgba(26,144,104,0.4);color:var(--light)}
+        .filter-tab{background:var(--card);border:1px solid var(--card-border);border-radius:9px;padding:8px 14px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s}
+        .filter-tab:hover{border-color:rgba(56,189,248,0.35);color:var(--text)}
+        .filter-tab.active{background:rgba(56,189,248,0.14);border-color:rgba(56,189,248,0.4);color:var(--cyan)}
 
         /* TABLA */
-        .table-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-        .header-row{display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr 1fr 110px;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border)}
+        .table-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;overflow:hidden}
+        .header-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 170px;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border)}
         .th{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase}
-        .pago-row{display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr 1fr 110px;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:center;animation:fadeIn .3s ease both;transition:background .18s;min-width:0}
+        .pago-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 170px;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:center;animation:fadeIn .3s ease both;transition:background .18s;min-width:0}
+        .acciones-pago{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
         .pago-row > div{min-width:0;overflow:hidden}
         .pago-row:last-child{border-bottom:none}
-        .pago-row:hover{background:rgba(255,255,255,0.03)}
-        .p-avatar{width:34px;height:34px;border-radius:50%;background:rgba(26,144,104,0.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text);flex-shrink:0}
+        .pago-row:hover{background:var(--surface2)}
+        .p-avatar{width:34px;height:34px;border-radius:50%;background:rgba(56,189,248,0.18);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text);flex-shrink:0}
         .p-name-wrap{display:flex;align-items:center;gap:10px}
         .p-name{font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .td-text{font-size:13px;color:var(--muted)}
-        .td-monto{font-size:14px;font-weight:600;color:var(--text)}
-        .badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:100px;display:inline-block}
-        .b-green{background:rgba(26,144,104,0.18);color:var(--light)}
+        .td-monto{font-size:14px;font-weight:700;color:var(--text)}
+        .badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:100px;display:inline-block}
+        .b-green{background:rgba(52,211,153,0.15);color:var(--green)}
         .b-amber{background:rgba(245,180,0,0.15);color:var(--amber)}
-        .b-blue{background:rgba(224,68,68,0.15);color:var(--red)}
-        .b-red{background:rgba(224,68,68,0.15);color:var(--red)}
-        .btn-action{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .18s}
-        .btn-action:hover{background:rgba(26,144,104,0.15);border-color:rgba(26,144,104,0.3);color:var(--light)}
+        .b-red{background:rgba(242,85,85,0.15);color:var(--red)}
+        .b-purple{background:rgba(167,139,250,0.15);color:var(--purple)}
+        .btn-action{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 12px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s}
+        .btn-action:hover{background:rgba(56,189,248,0.15);border-color:rgba(56,189,248,0.3);color:var(--cyan)}
         .empty-state{padding:60px 20px;text-align:center;color:var(--muted);font-size:14px}
 
         /* MODAL */
-        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
-        .modal{background:#111D16;border:1px solid var(--border);border-radius:18px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
+        .modal{background:#0A1220;border:1px solid var(--border);border-radius:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
         .modal-header{padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between}
-        .modal-title{font-size:18px;font-weight:600;color:var(--text)}
+        .modal-title{font-size:18px;font-weight:700;color:var(--text)}
         .modal-sub{font-size:13px;color:var(--muted);margin-top:4px}
-        .modal-close{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:16px;transition:all .18s;flex-shrink:0}
-        .modal-close:hover{background:rgba(224,68,68,0.15);color:var(--red)}
+        .modal-close{background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:16px;transition:all .18s;flex-shrink:0}
+        .modal-close:hover{background:rgba(242,85,85,0.15);color:var(--red)}
         .modal-body{padding:24px 28px}
         .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
         .form-grid-full{grid-column:1/-1}
         .form-group{display:flex;flex-direction:column;gap:6px}
         .form-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase}
-        .form-input,.form-select{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:9px;padding:11px 13px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
-        .form-input:focus,.form-select:focus{border-color:var(--mid);box-shadow:0 0 0 3px rgba(26,144,104,0.10)}
-        .form-select option{background:#111D16;color:var(--text)}
-        .form-input.err,.form-select.err{border-color:rgba(224,68,68,0.5)}
+        .form-input,.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
+        .form-input:focus,.form-select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(56,189,248,0.12)}
+        .form-select option{background:#0A1220;color:var(--text)}
+        .form-input.err,.form-select.err{border-color:rgba(242,85,85,0.5)}
         .err-msg{font-size:11px;color:var(--red)}
         .modal-footer{padding:0 28px 24px;display:flex;gap:10px;justify-content:flex-end}
-        .btn-cancel{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:9px;padding:11px 20px;font-size:14px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .18s}
+        .btn-cancel{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 20px;font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s}
         .btn-cancel:hover{color:var(--text)}
-        .btn-save{background:var(--mid);color:#fff;border:none;border-radius:9px;padding:11px 24px;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:8px;transition:background .2s}
-        .btn-save:hover:not(:disabled){background:#158057}
-        .btn-save:disabled{opacity:.5;cursor:not-allowed}
+        .btn-save{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:8px;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 16px rgba(37,99,235,0.3)}
+        .btn-save:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(56,189,248,0.4)}
+        .btn-save:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
         /* CONFIRM */
-        .confirm-modal{background:#0f1d16;border:1px solid rgba(26,144,104,0.3);border-radius:16px;width:100%;max-width:380px;padding:28px;animation:slideUp .2s ease}
-        .confirm-title{font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px}
+        .confirm-modal{background:#0C1B16;border:1px solid rgba(52,211,153,0.3);border-radius:18px;width:100%;max-width:380px;padding:28px;animation:slideUp .2s ease}
+        .confirm-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px}
         .confirm-body{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:18px}
-        .confirm-name{color:var(--text);font-weight:500}
+        .confirm-name{color:var(--text);font-weight:600}
         .confirm-btns{display:flex;gap:10px;justify-content:flex-end}
+        .btn-danger{background:var(--red);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .2s;display:flex;align-items:center;gap:8px}
+        .btn-danger:hover:not(:disabled){opacity:.85}
+        .btn-danger:disabled{opacity:.5;cursor:not-allowed}
 
-        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:var(--mid);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(26,144,104,0.4);transition:transform .2s;z-index:50;text-decoration:none}
+        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
         .chatbot-bubble:hover{transform:scale(1.08)}
 
         @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
@@ -351,7 +413,7 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
             </div>
             <div className="stat-card">
               <div className="stat-label">Por cobrar</div>
-              <div className="stat-num" style={{color: totales.pendiente>0?'#F5B400':'#E8F5EE'}}>${totales.pendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</div>
+              <div className="stat-num" style={{color: totales.pendiente>0?'#F5B400':'#E7EDF7'}}>${totales.pendiente.toLocaleString('es-MX',{minimumFractionDigits:2})}</div>
               <div className="stat-icon icon-amber">⏳</div>
             </div>
             <div className="stat-card">
@@ -404,14 +466,18 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
                   <div className="td-monto">${Number(p.monto).toLocaleString('es-MX',{minimumFractionDigits:2})}</div>
                   <div className="td-text">{METODO_LABELS[p.metodo_pago] ?? p.metodo_pago}</div>
                   <div>
-                    <span className={`badge ${p.estado_pago==='pagado'?'b-green':p.estado_pago==='reembolsado'?'b-red':'b-amber'}`}>
+                    <span className={`badge ${p.estado_pago==='pagado'?'b-green':p.estado_pago==='reembolsado'?'b-purple':'b-amber'}`}>
                       {p.estado_pago==='pagado'?'Pagado':p.estado_pago==='reembolsado'?'Reembolsado':'Pendiente'}
                     </span>
                   </div>
-                  <div>
+                  <div className="acciones-pago">
                     {p.estado_pago==='pendiente' && (
                       <button className="btn-action" onClick={() => { setMetodoCobro(p.metodo_pago); setConfirmCobro(p) }}>Cobrar</button>
                     )}
+                    {p.estado_pago==='pagado' && (
+                      <button className="btn-action" onClick={() => setConfirmReembolso(p)}>Reembolsar</button>
+                    )}
+                    <button className="btn-action" onClick={() => { setModalEditar(p); setErrores({}) }}>Editar</button>
                   </div>
                 </div>
               )
@@ -503,6 +569,75 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR PAGO */}
+      {modalEditar && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) { setModalEditar(null); setErrores({}) } }}>
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Editar pago</div>
+                <div className="modal-sub">{modalEditar.pacientes?.nombre_completo}</div>
+              </div>
+              <button className="modal-close" onClick={() => { setModalEditar(null); setErrores({}) }}>✕</button>
+            </div>
+            <form onSubmit={editarPago} noValidate>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label className="form-label">Monto *</label>
+                    <input name="monto" type="number" min="0" step="0.01"
+                      className={`form-input${errores.monto?' err':''}`}
+                      defaultValue={modalEditar.monto} />
+                    {errores.monto && <span className="err-msg">{errores.monto}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Método *</label>
+                    <select name="metodo_pago" className={`form-select${errores.metodo_pago?' err':''}`} defaultValue={modalEditar.metodo_pago}>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="aseguradora">Aseguradora</option>
+                    </select>
+                    {errores.metodo_pago && <span className="err-msg">{errores.metodo_pago}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => { setModalEditar(null); setErrores({}) }}>Cancelar</button>
+                <button type="submit" className="btn-save" disabled={loading}>
+                  {loading && <div style={{width:14,height:14,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',animation:'spin .7s linear infinite'}}/>}
+                  Guardar cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR REEMBOLSO */}
+      {confirmReembolso && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) { setConfirmReembolso(null); setMotivoReembolso('') } }}>
+          <div className="confirm-modal" style={{background:'#1A0E0E', borderColor:'rgba(242,85,85,0.25)'}}>
+            <div className="confirm-title">↩ Confirmar reembolso</div>
+            <p className="confirm-body">
+              ¿Deseas marcar como <span className="confirm-name">reembolsado</span> el pago de <span className="confirm-name">${Number(confirmReembolso.monto).toLocaleString('es-MX',{minimumFractionDigits:2})}</span> de <span className="confirm-name">{confirmReembolso.pacientes?.nombre_completo}</span>? Esta acción queda registrada en el log de auditoría.
+            </p>
+            <div className="form-group" style={{marginBottom:18}}>
+              <label className="form-label">Motivo (opcional)</label>
+              <input className="form-input" placeholder="Ej. cancelación de sesión, error de cobro..."
+                value={motivoReembolso} onChange={e => setMotivoReembolso(e.target.value)} />
+            </div>
+            <div className="confirm-btns">
+              <button className="btn-cancel" onClick={() => { setConfirmReembolso(null); setMotivoReembolso('') }}>Cancelar</button>
+              <button className="btn-danger" disabled={loading} onClick={reembolsarPago}>
+                {loading && <div style={{width:14,height:14,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',animation:'spin .7s linear infinite'}}/>}
+                Confirmar reembolso
+              </button>
+            </div>
           </div>
         </div>
       )}

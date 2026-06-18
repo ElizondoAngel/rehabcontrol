@@ -65,12 +65,17 @@ export async function POST(request: Request) {
   }
 }
 
-// ── PATCH — Marcar pago pendiente como cobrado ────────────────
+// ── PATCH — Cobrar, editar o reembolsar un pago ───────────────
 const PatchSchema = z.object({
   id: z.number().int().positive(),
-  estado_pago: z.enum(['pendiente','pagado','reembolsado']),
+  estado_pago: z.enum(['pendiente','pagado','reembolsado']).optional(),
   metodo_pago: z.enum(['efectivo','transferencia','tarjeta','aseguradora']).optional(),
-})
+  monto:       z.number().positive().optional(),
+  motivo:      z.string().max(300).optional(),
+}).refine(
+  d => d.estado_pago !== undefined || d.metodo_pago !== undefined || d.monto !== undefined,
+  'Nada que actualizar'
+)
 
 export async function PATCH(request: Request) {
   try {
@@ -86,10 +91,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
 
-    const { id, ...campos } = parsed.data
-    const update: Record<string, unknown> = { estado_pago: campos.estado_pago }
+    const { id, motivo, ...campos } = parsed.data
+    const update: Record<string, unknown> = {}
+    if (campos.estado_pago) update.estado_pago = campos.estado_pago
     if (campos.metodo_pago) update.metodo_pago = campos.metodo_pago
+    if (campos.monto !== undefined) update.monto = campos.monto
     if (campos.estado_pago === 'pagado') update.fecha_pago = new Date().toISOString()
+    if (motivo) update.motivo_reembolso = motivo
 
     const { error } = await supabase
       .from('pagos')
@@ -100,8 +108,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Error al actualizar el pago' }, { status: 500 })
     }
 
+    // Acción para el log: prioriza el cambio de estado sobre la edición simple
+    const accion = campos.estado_pago === 'pagado'      ? 'COBRAR_PAGO'
+                  : campos.estado_pago === 'reembolsado' ? 'REEMBOLSAR_PAGO'
+                  : 'EDITAR_PAGO'
+
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion: 'COBRAR_PAGO',
+      user_id: auth.user.id, accion,
       tabla_afectada: 'pagos', registro_id: id.toString(),
     })
 
