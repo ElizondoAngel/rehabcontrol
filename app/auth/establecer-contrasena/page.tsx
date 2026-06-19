@@ -72,7 +72,6 @@ export default function EstablecerContrasenaPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
           --bg:#060B14;--card:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.10);

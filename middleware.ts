@@ -25,7 +25,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // En desarrollo local sin internet, getUser() falla porque requiere
+  // conectividad con Supabase. getSession() lee la cookie local y funciona
+  // offline — menos seguro (no verifica revocación del token) pero suficiente
+  // para desarrollo. En producción (Vercel) se usa getUser() siempre.
+  let user = null
+  if (process.env.NEXT_PUBLIC_OFFLINE_DEV === 'true') {
+    const { data: { session } } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  } else {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    user = authUser
+  }
+
   const pathname = request.nextUrl.pathname
 
   // Rutas públicas — no redirigir
