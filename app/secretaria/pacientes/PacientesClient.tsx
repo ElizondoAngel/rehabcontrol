@@ -19,6 +19,7 @@
  *   • Permisos verificados en Server Component padre
  */
 
+import NotifBell from '@/app/components/NotifBell'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 
@@ -38,6 +39,7 @@ interface Paciente {
   profiles?: { nombre_completo: string }
 }
 interface Props {
+  currentUserId: string
   terapeutas: Terapeuta[]
   pacientesIniciales: Paciente[]
   userNombre: string
@@ -80,19 +82,18 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success'|'error'; o
   return (
     <div style={{
       position:'fixed', bottom:90, right:28, zIndex:200,
-      background: type==='success' ? 'rgba(52,211,153,0.10)' : 'rgba(242,85,85,0.10)',
-      border: `1px solid ${type==='success' ? 'rgba(52,211,153,0.35)' : 'rgba(242,85,85,0.35)'}`,
-      borderLeft: `3px solid ${type==='success' ? '#34D399' : '#F25555'}`,
+      background: type==='success' ? '#162419' : '#1a0f0f',
+      border: `1px solid ${type==='success' ? 'rgba(26,144,104,0.4)' : 'rgba(224,68,68,0.4)'}`,
+      borderLeft: `3px solid ${type==='success' ? '#1A9068' : '#E04444'}`,
       borderRadius:12, padding:'14px 18px', minWidth:280, maxWidth:360,
       display:'flex', alignItems:'center', gap:12,
-      backdropFilter:'blur(16px)',
-      boxShadow:'0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.4)',
       animation:'slideUp .3s ease',
     }}>
       <span style={{fontSize:18}}>{type==='success'?'✅':'❌'}</span>
-      <span style={{fontSize:14, color:'#E7EDF7', flex:1}}>{msg}</span>
+      <span style={{fontSize:14, color:'#E8F5EE', flex:1}}>{msg}</span>
       {/* Evento click — cerrar toast */}
-      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(231,237,247,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
+      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(232,245,238,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
     </div>
   )
 }
@@ -101,13 +102,13 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success'|'error'; o
 function Loader() {
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 0'}}>
-      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(56,189,248,0.2)',borderTopColor:'#38BDF8',animation:'spin .7s linear infinite'}}/>
+      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(26,144,104,0.2)',borderTopColor:'#1A9068',animation:'spin .7s linear infinite'}}/>
     </div>
   )
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function PacientesClient({ terapeutas, pacientesIniciales, userNombre }: Props) {
+export default function PacientesClient({ terapeutas, pacientesIniciales, userNombre , currentUserId}: Props) {
 
   // ── ESTADO ──────────────────────────────────────────────────
   const [pacientes, setPacientes]     = useState<Paciente[]>(pacientesIniciales)
@@ -254,7 +255,7 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
   // ── RENDER ───────────────────────────────────────────────────
   return (
     <>
-      <style>{`
+    <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
           --bg:#060B14;--sidebar:#0A1220;--card:rgba(255,255,255,0.035);--card-border:rgba(255,255,255,0.09);
@@ -400,7 +401,6 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
         @keyframes spin    { to{transform:rotate(360deg)} }
         @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.5} }
       `}</style>
-
       {/* SIDEBAR */}
       <div className="sidebar">
         <div className="sb-brand">
@@ -437,7 +437,7 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
           <span className="topbar-title">Gestión de Pacientes</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
-            <div className="notif">🔔</div>
+            <NotifBell userId={currentUserId} rol="secretaria" />
           </div>
         </div>
 
@@ -457,15 +457,15 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
           {/* STATS — DOM dinámico, se recalculan con el estado */}
           <div className="stats-row">
             <div className="stat-mini">
-              <div className="stat-mini-icon" style={{background:'rgba(56,189,248,0.15)'}}>👥</div>
+              <div className="stat-mini-icon" style={{background:'rgba(26,144,104,0.15)'}}>👥</div>
               <div><div className="stat-mini-num">{pacientes.length}</div><div className="stat-mini-lbl">Total registrados</div></div>
             </div>
             <div className="stat-mini">
-              <div className="stat-mini-icon" style={{background:'rgba(52,211,153,0.15)'}}>✅</div>
+              <div className="stat-mini-icon" style={{background:'rgba(79,196,154,0.15)'}}>✅</div>
               <div><div className="stat-mini-num">{pacientes.filter(p=>p.activo).length}</div><div className="stat-mini-lbl">Activos</div></div>
             </div>
             <div className="stat-mini">
-              <div className="stat-mini-icon" style={{background:'rgba(242,85,85,0.12)'}}>🚫</div>
+              <div className="stat-mini-icon" style={{background:'rgba(224,68,68,0.12)'}}>🚫</div>
               <div><div className="stat-mini-num">{pacientes.filter(p=>!p.activo).length}</div><div className="stat-mini-lbl">Dados de baja</div></div>
             </div>
           </div>
@@ -642,10 +642,10 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
                   {/* Aviso de privacidad — requerimiento de seguridad LFPDPPP */}
                   {!modoEdicion && (
                     <div className="form-group form-grid-full">
-                      <div className={`aviso-row${errores.aviso_privacidad?' err':''}`} style={errores.aviso_privacidad?{borderColor:'rgba(242,85,85,0.4)'}:{}}>
+                      <div className={`aviso-row${errores.aviso_privacidad?' err':''}`} style={errores.aviso_privacidad?{borderColor:'rgba(224,68,68,0.4)'}:{}}>
                         <input type="checkbox" name="aviso_privacidad" value="si" className="aviso-check" id="aviso" />
                         <label htmlFor="aviso" className="aviso-text">
-                          El paciente ha leído y acepta el <strong style={{color:''+(errores.aviso_privacidad?'var(--red)':'var(--cyan)')}}>Aviso de Privacidad</strong> conforme a la LFPDPPP. Se registrará su nombre, fecha, hora e IP de aceptación en los logs de auditoría.
+                          El paciente ha leído y acepta el <strong style={{color:''+(errores.aviso_privacidad?'var(--red)':'var(--light)')}}>Aviso de Privacidad</strong> conforme a la LFPDPPP. Se registrará su nombre, fecha, hora e IP de aceptación en los logs de auditoría.
                         </label>
                       </div>
                       {errores.aviso_privacidad && <span className="err-msg">{errores.aviso_privacidad}</span>}
@@ -701,7 +701,6 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
       {/* TOAST — Interacción profesional con feedback visual */}
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      <a href="#" className="chatbot-bubble" title="Asistente RC">💬</a>
     </>
   )
 }

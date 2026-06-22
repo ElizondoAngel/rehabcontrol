@@ -35,7 +35,6 @@ export default async function PacientesPage() {
     <PacientesClient
       terapeutas={terapeutas ?? []}
       pacientesIniciales={pacientes ?? []}
-      userNombre={profile?.nombre_completo ?? ''}
-    />
+      userNombre={profile?.nombre_completo ?? ''} currentUserId={''}    />
   )
 }

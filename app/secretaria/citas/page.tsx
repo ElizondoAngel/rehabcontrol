@@ -43,7 +43,6 @@ export default async function CitasPage() {
     <CitasClient
       terapeutas={terapeutas ?? []}
       pacientes={pacientes ?? []}
-      citasIniciales={citas ?? []}
-    />
+      citasIniciales={citas ?? []} currentUserId={''}    />
   )
 }

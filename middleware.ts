@@ -1,33 +1,8 @@
-
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
-
-  // ─────────────────────────────────────────────
-  // RUTAS PÚBLICAS
-  // ─────────────────────────────────────────────
-  const publicRoutes = [
-    '/login',
-    '/unauthorized',
-  ]
-
-  const isPublicRoute =
-    publicRoutes.includes(pathname) ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/_next')
-
-  if (isPublicRoute) {
-    return NextResponse.next()
-  }
-
-  // ─────────────────────────────────────────────
-  // SUPABASE
-  // ─────────────────────────────────────────────
-  let response = NextResponse.next({
-    request,
-  })
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,32 +16,46 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
-
-          response = NextResponse.next({
-            request,
-          })
-
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options)
           )
         },
       },
     }
   )
 
-  // ─────────────────────────────────────────────
-  // AUTH
-  // ─────────────────────────────────────────────
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
 
-  // No autenticado
+  // ── Rutas siempre públicas — salir ANTES de verificar sesión ──
+  // Esto evita que visitantes nuevos queden atrapados en el login
+  if (
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/unauthorized' ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon')
+  ) {
+    return supabaseResponse
+  }
+
+  // ── Verificar sesión solo para rutas protegidas ───────────────
+  let user = null
+  if (process.env.NEXT_PUBLIC_OFFLINE_DEV === 'true') {
+    const { data: { session } } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  } else {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    user = authUser
+  }
+
+  // Sin sesión → redirigir al login
   if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  return response
+  return supabaseResponse
 }
 
 export const config = {
@@ -74,4 +63,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-

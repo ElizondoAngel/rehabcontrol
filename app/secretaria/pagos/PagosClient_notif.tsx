@@ -18,6 +18,7 @@
  *   • Audit log en cada cobro o registro
  */
 
+import NotifBell from '@/app/components/NotifBell'
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 
@@ -34,6 +35,7 @@ interface Pago {
   citas?: { fecha_hora: string }
 }
 interface Props {
+  currentUserId: string
   pagosIniciales: Pago[]
   pacientes: PacienteOpt[]
 }
@@ -70,7 +72,7 @@ function Loader() {
   )
 }
 
-export default function PagosClient({ pagosIniciales, pacientes }: Props) {
+export default function PagosClient({ pagosIniciales, pacientes, currentUserId }: Props) {
   const [pagos, setPagos]         = useState<Pago[]>(pagosIniciales)
   const [filtroEstado, setFiltroEstado] = useState<'todos'|'pendiente'|'pagado'|'reembolsado'>('todos')
   const [busqueda, setBusqueda]   = useState('')
@@ -84,7 +86,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
   const [motivoReembolso, setMotivoReembolso] = useState('')
   const [errores, setErrores] = useState<Record<string,string>>({})
 
-  // ── TOTALES DINÁMICOS — recalculados con cada cambio de estado ─
   const totales = useMemo(() => {
     const pagado = pagos.filter(p => p.estado_pago === 'pagado').reduce((s,p) => s + Number(p.monto), 0)
     const pendiente = pagos.filter(p => p.estado_pago === 'pendiente').reduce((s,p) => s + Number(p.monto), 0)
@@ -93,14 +94,12 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
     return { pagado, pendiente, ingresosHoy, totalPendientes: pagos.filter(p=>p.estado_pago==='pendiente').length }
   }, [pagos])
 
-  // ── FILTRO DINÁMICO ───────────────────────────────────────────
   const pagosFiltrados = useMemo(() => {
     return pagos
       .filter(p => filtroEstado==='todos' ? true : p.estado_pago===filtroEstado)
       .filter(p => p.pacientes?.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()))
   }, [pagos, filtroEstado, busqueda])
 
-  // ── COBRAR PAGO PENDIENTE ─────────────────────────────────────
   async function cobrarPago() {
     if (!confirmCobro) return
     setLoading(true)
@@ -119,7 +118,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
     setConfirmCobro(null)
   }
 
-  // ── REGISTRAR PAGO MANUAL (sin cita) ──────────────────────────
   async function registrarPagoManual(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
@@ -157,7 +155,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
     setErrores({})
   }
 
-  // ── EDITAR PAGO (monto / método) ──────────────────────────────
   async function editarPago(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!modalEditar) return
@@ -187,7 +184,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
     }
   }
 
-  // ── REEMBOLSAR PAGO ────────────────────────────────────────────
   async function reembolsarPago() {
     if (!confirmReembolso) return
     setLoading(true)
@@ -245,8 +241,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .topbar-right{display:flex;align-items:center;gap:16px}
         .online-dot{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cyan);font-weight:500}
         .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
-        .notif{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .18s}
-        .notif:hover{background:var(--surface2)}
         .content{flex:1;overflow-y:auto;padding:28px}
 
         .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px}
@@ -255,7 +249,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .btn-nuevo{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#fff;border:none;border-radius:11px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:7px;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 18px rgba(37,99,235,0.32)}
         .btn-nuevo:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(56,189,248,0.4)}
 
-        /* TOTALES */
         .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
         .stat-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
         .stat-card:hover{border-color:rgba(56,189,248,0.3);transform:translateY(-2px)}
@@ -267,7 +260,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .icon-blue{background:rgba(56,189,248,0.15)}
         .icon-purple{background:rgba(167,139,250,0.15)}
 
-        /* FILTROS */
         .filters{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
         .search-wrap{flex:1;min-width:220px;position:relative}
         .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
@@ -278,7 +270,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .filter-tab:hover{border-color:rgba(56,189,248,0.35);color:var(--text)}
         .filter-tab.active{background:rgba(56,189,248,0.14);border-color:rgba(56,189,248,0.4);color:var(--cyan)}
 
-        /* TABLA */
         .table-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;overflow:hidden}
         .header-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 170px;gap:14px;padding:12px 20px;border-bottom:1px solid var(--border)}
         .th{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase}
@@ -301,7 +292,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .btn-action:hover{background:rgba(56,189,248,0.15);border-color:rgba(56,189,248,0.3);color:var(--cyan)}
         .empty-state{padding:60px 20px;text-align:center;color:var(--muted);font-size:14px}
 
-        /* MODAL */
         .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
         .modal{background:#0A1220;border:1px solid var(--border);border-radius:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
         .modal-header{padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between}
@@ -326,7 +316,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .btn-save:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(56,189,248,0.4)}
         .btn-save:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-        /* CONFIRM */
         .confirm-modal{background:#0C1B16;border:1px solid rgba(52,211,153,0.3);border-radius:18px;width:100%;max-width:380px;padding:28px;animation:slideUp .2s ease}
         .confirm-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px}
         .confirm-body{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:18px}
@@ -335,9 +324,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         .btn-danger{background:var(--red);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:opacity .2s;display:flex;align-items:center;gap:8px}
         .btn-danger:hover:not(:disabled){opacity:.85}
         .btn-danger:disabled{opacity:.5;cursor:not-allowed}
-
-        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
-        .chatbot-bubble:hover{transform:scale(1.08)}
 
         @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
         @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
@@ -385,7 +371,7 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
           <span className="topbar-title">Pagos</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
-            <div className="notif">🔔</div>
+            <NotifBell userId={currentUserId} rol="secretaria" />
           </div>
         </div>
 
@@ -398,7 +384,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
             <button className="btn-nuevo" onClick={() => setModalNuevo(true)}>+ Registrar pago</button>
           </div>
 
-          {/* TOTALES — recalculados dinámicamente */}
           <div className="stats-row">
             <div className="stat-card">
               <div className="stat-label">Ingresos de hoy</div>
@@ -422,7 +407,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
             </div>
           </div>
 
-          {/* FILTROS */}
           <div className="filters">
             <div className="search-wrap">
               <span className="search-icon">🔍</span>
@@ -436,7 +420,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
             ))}
           </div>
 
-          {/* TABLA */}
           <div className="table-card">
             <div className="header-row">
               <div className="th">Paciente</div>
@@ -513,7 +496,7 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
         </div>
       )}
 
-      {/* MODAL NUEVO PAGO MANUAL */}
+      {/* MODAL NUEVO PAGO */}
       {modalNuevo && (
         <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) { setModalNuevo(false); setErrores({}) } }}>
           <div className="modal">
@@ -642,8 +625,6 @@ export default function PagosClient({ pagosIniciales, pacientes }: Props) {
       )}
 
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-
-      <a href="#" className="chatbot-bubble" title="Asistente RC">💬</a>
     </>
   )
 }

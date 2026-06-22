@@ -19,6 +19,7 @@
  *   • Audit log en cada operación
  */
 
+import NotifBell from '@/app/components/NotifBell'
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 
@@ -38,6 +39,7 @@ interface Cita {
   pagos?: { monto: number; metodo_pago: string; estado_pago: string }[]
 }
 interface Props {
+  currentUserId: string
   terapeutas: Terapeuta[]
   pacientes: PacienteOpt[]
   citasIniciales: Cita[]
@@ -73,17 +75,16 @@ function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onC
   return (
     <div style={{
       position:'fixed', bottom:90, right:28, zIndex:200,
-      background: type==='success' ? 'rgba(52,211,153,0.10)' : 'rgba(242,85,85,0.10)',
-      border: `1px solid ${type==='success' ? 'rgba(52,211,153,0.35)' : 'rgba(242,85,85,0.35)'}`,
-      borderLeft: `3px solid ${type==='success' ? '#34D399' : '#F25555'}`,
+      background: type==='success' ? '#162419' : '#1a0f0f',
+      border: `1px solid ${type==='success' ? 'rgba(26,144,104,0.4)' : 'rgba(224,68,68,0.4)'}`,
+      borderLeft: `3px solid ${type==='success' ? '#1A9068' : '#E04444'}`,
       borderRadius:12, padding:'14px 18px', minWidth:280, maxWidth:380,
       display:'flex', alignItems:'center', gap:12,
-      backdropFilter:'blur(16px)',
-      boxShadow:'0 8px 32px rgba(0,0,0,0.5)', animation:'slideUp .3s ease',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.4)', animation:'slideUp .3s ease',
     }}>
       <span style={{fontSize:18}}>{type==='success'?'✅':'❌'}</span>
-      <span style={{fontSize:14, color:'#E7EDF7', flex:1}}>{msg}</span>
-      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(231,237,247,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
+      <span style={{fontSize:14, color:'#E8F5EE', flex:1}}>{msg}</span>
+      <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(232,245,238,0.4)',cursor:'pointer',fontSize:16}}>✕</button>
     </div>
   )
 }
@@ -91,7 +92,7 @@ function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onC
 function Loader() {
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 0'}}>
-      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(56,189,248,0.2)',borderTopColor:'#38BDF8',animation:'spin .7s linear infinite'}}/>
+      <div style={{width:32,height:32,borderRadius:'50%',border:'3px solid rgba(26,144,104,0.2)',borderTopColor:'#1A9068',animation:'spin .7s linear infinite'}}/>
     </div>
   )
 }
@@ -107,7 +108,7 @@ const METODO_LABELS: Record<string,string> = {
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function CitasClient({ terapeutas, pacientes, citasIniciales }: Props) {
+export default function CitasClient({ terapeutas, pacientes, citasIniciales , currentUserId}: Props) {
   const [citas, setCitas]           = useState<Cita[]>(citasIniciales)
   const [diaSeleccionado, setDia]   = useState(() => toISODate(new Date()))
   const [filtroTerapeuta, setFiltroTerapeuta] = useState('')
@@ -278,7 +279,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales }: P
 
   return (
     <>
-      <style>{`
+    <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
           --bg:#060B14;--sidebar:#0A1220;--card:rgba(255,255,255,0.035);--card-border:rgba(255,255,255,0.09);
@@ -436,7 +437,6 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales }: P
           .cita-terapeuta, .actions{grid-column:2}
         }
       `}</style>
-
       {/* SIDEBAR */}
       <div className="sidebar">
         <div className="sb-brand">
@@ -472,7 +472,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales }: P
           <span className="topbar-title">Agenda General</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
-            <div className="notif">🔔</div>
+            <NotifBell userId={currentUserId} rol="secretaria" />
           </div>
         </div>
 
@@ -766,7 +766,6 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales }: P
 
       {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      <a href="#" className="chatbot-bubble" title="Asistente RC">💬</a>
     </>
   )
 }

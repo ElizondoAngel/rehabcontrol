@@ -1,11 +1,15 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import TopbarActions from '@/app/components/TopbarActions'
 
 export default async function SecretariaDashboard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const { data: profile } = await supabase
+    .from('profiles').select('nombre_completo, rol').eq('id', user.id).single()
 
   const hoy = new Date().toISOString().split('T')[0]
   const inicioHoy = `${hoy}T00:00:00`
@@ -50,6 +54,7 @@ export default async function SecretariaDashboard() {
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
           --bg:#060B14;--sidebar:#0A1220;--card:rgba(255,255,255,0.035);--card-border:rgba(255,255,255,0.09);
@@ -157,7 +162,7 @@ export default async function SecretariaDashboard() {
           <span className="topbar-title">Panel</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/> En línea</div>
-            <div className="notif">🔔</div>
+            <TopbarActions userId={user.id} rol={profile?.rol ?? 'secretaria'} nombre={profile?.nombre_completo} />
           </div>
         </div>
         <div className="content">
@@ -216,8 +221,6 @@ export default async function SecretariaDashboard() {
           </div>
         </div>
       </div>
-
-      <a href="#" className="chatbot-bubble" title="Asistente RC">💬</a>
     </>
   )
 }

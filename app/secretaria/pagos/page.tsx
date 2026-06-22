@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import PagosClient from './PagosClient'
+import PagosClient from './PagosClient_notif'
 
 export default async function PagosPage() {
   const supabase = await createClient()
@@ -37,7 +37,6 @@ export default async function PagosPage() {
   return (
     <PagosClient
       pagosIniciales={pagos ?? []}
-      pacientes={pacientes ?? []}
-    />
+      pacientes={pacientes ?? []} currentUserId={''}    />
   )
 }
