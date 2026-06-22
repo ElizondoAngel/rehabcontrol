@@ -188,11 +188,11 @@ export default function LogsClient({ logsIniciales }: Props) {
           {[
             {icon:'🏠', label:'Panel General',     href:'/admin/dashboard', active:false},
             {icon:'👥', label:'Usuarios y Roles',  href:'/admin/usuarios',  active:false},
-            {icon:'📋', label:'Expedientes',        href:'#',                active:false},
-            {icon:'💳', label:'Finanzas',           href:'#',                active:false},
-            {icon:'📊', label:'Reportes',           href:'#',                active:false},
-            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs',     active:true},
-            {icon:'⚙️', label:'Configuración',      href:'#',                active:false},
+            {icon:'📋', label:'Expedientes',        href:'/admin/expedientes', active:false},
+            {icon:'💳', label:'Finanzas',           href:'/admin/finanzas', active:false},
+            {icon:'📊', label:'Reportes',           href:'/admin/reportes', active:false},
+            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs', active:true},
+            {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion', active:false},
           ].map(n => (
             <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
               <span className="sb-nav-icon">{n.icon}</span>{n.label}
