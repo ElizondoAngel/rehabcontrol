@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import TopbarActions from '@/app/components/TopbarActions'
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
@@ -13,25 +14,21 @@ export default async function AdminDashboard() {
   const finHoy    = `${hoy}T23:59:59`
   const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0)
 
-  // ── Pacientes activos ────────────────────────────────────────
   const { count: pacientesActivos } = await supabase
     .from('pacientes').select('*', { count:'exact', head:true }).eq('activo', true)
 
-  // ── Sesiones (citas) hoy ──────────────────────────────────────
   const { data: citasHoy } = await supabase
     .from('citas').select('estado')
     .gte('fecha_hora', inicioHoy).lte('fecha_hora', finHoy)
   const sesionesHoy = citasHoy?.length ?? 0
   const sesionesCompletadas = citasHoy?.filter(c => c.estado === 'completada').length ?? 0
 
-  // ── Ingresos del mes ──────────────────────────────────────────
   const { data: pagosMes } = await supabase
     .from('pagos').select('monto')
     .eq('estado_pago', 'pagado')
     .gte('fecha_pago', inicioMes.toISOString())
   const ingresosMes = (pagosMes ?? []).reduce((s, p) => s + Number(p.monto), 0)
 
-  // ── Usuarios del sistema ──────────────────────────────────────
   const { data: usuarios, count: totalUsuarios } = await supabase
     .from('profiles')
     .select('id, nombre_completo, rol, activo, created_at', { count:'exact' })
@@ -40,7 +37,6 @@ export default async function AdminDashboard() {
 
   const rolesActivos = new Set((usuarios ?? []).map(u => u.rol)).size
 
-  // ── Últimos logs de auditoría ──────────────────────────────────
   const { data: logs } = await supabase
     .from('audit_logs')
     .select('id_logs, accion, tabla_afectada, timestamp, profiles(nombre_completo)')
@@ -80,7 +76,6 @@ export default async function AdminDashboard() {
           --red:#F25555;--amber:#F5B400;--green:#34D399;--purple:#A78BFA;
         }
         body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
-        /* SIDEBAR */
         .sidebar{width:260px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
         .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
         .sb-logo-row{display:flex;align-items:center;gap:10px}
@@ -99,20 +94,15 @@ export default async function AdminDashboard() {
         .sb-bottom{padding:12px 10px;border-top:1px solid var(--border)}
         .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .18s}
         .sb-bottom a:hover{color:var(--red)}
-        /* MAIN */
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
         .topbar{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0}
         .topbar-title{font-size:14px;color:var(--muted);font-weight:500}
         .topbar-right{display:flex;align-items:center;gap:16px}
         .online-dot{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cyan);font-weight:500}
         .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
-        .notif{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;transition:background .18s}
-        .notif:hover{background:var(--surface2)}
         .content{flex:1;overflow-y:auto;padding:28px}
-        /* PAGE HEADER */
         .page-title{font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px;letter-spacing:-0.015em}
         .page-sub{font-size:14px;color:var(--muted);margin-bottom:28px}
-        /* METRIC CARDS */
         .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
         .metric{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s}
         .metric:hover{border-color:rgba(56,189,248,0.3);transform:translateY(-2px)}
@@ -124,7 +114,6 @@ export default async function AdminDashboard() {
         .icon-blue{background:rgba(56,189,248,0.15)}
         .icon-amber{background:rgba(245,180,0,0.15)}
         .icon-red{background:rgba(167,139,250,0.15)}
-        /* TABLES GRID */
         .tables-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
         .table-card{background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:22px}
         .table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
@@ -132,7 +121,6 @@ export default async function AdminDashboard() {
         .table-action{font-size:12px;color:var(--cyan);text-decoration:none;cursor:pointer;font-weight:500}
         .live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--cyan);font-weight:500}
         .live-dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
-        /* USER ROWS */
         .user-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border)}
         .user-row:last-child{border-bottom:none}
         .user-left{display:flex;align-items:center;gap:11px}
@@ -143,7 +131,6 @@ export default async function AdminDashboard() {
         .badge-green{background:rgba(52,211,153,0.15);color:var(--green)}
         .badge-gray{background:rgba(255,255,255,0.06);color:var(--muted)}
         .badge-sub{font-size:10px;color:var(--muted);text-align:right;margin-top:2px}
-        /* LOG ROWS */
         .log-row{display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
         .log-row:last-child{border-bottom:none}
         .log-left{display:flex;align-items:flex-start;gap:10px}
@@ -157,15 +144,10 @@ export default async function AdminDashboard() {
         .log-action{font-size:13px;color:var(--text)}
         .log-user{font-size:11px;color:var(--muted)}
         .log-time{font-size:11px;color:var(--muted);white-space:nowrap}
-        /* CHATBOT BUBBLE */
-        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
-        .chatbot-bubble:hover{transform:scale(1.08)}
-        /* AVATAR COLORS */
         .c1{background:rgba(56,189,248,0.25)}
         .c2{background:rgba(59,130,246,0.25)}
         .c3{background:rgba(167,139,250,0.22)}
         .c4{background:rgba(245,180,0,0.20)}
-
         @media (max-width: 1000px) {
           .metrics{grid-template-columns:repeat(2,1fr)}
           .tables-grid{grid-template-columns:1fr}
@@ -185,12 +167,12 @@ export default async function AdminDashboard() {
         </div>
         <nav className="sb-nav">
           {[
-            {icon:'🏠', label:'Panel General',     href:'/admin/dashboard', active:true},
-            {icon:'👥', label:'Usuarios y Roles',  href:'/admin/usuarios',  active:false},
-            {icon:'📋', label:'Expedientes',        href:'/admin/expedientes', active:false},
-            {icon:'💳', label:'Finanzas',           href:'/admin/finanzas', active:true},
-            {icon:'📊', label:'Reportes',           href:'/admin/reportes', active:false},
-            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs',     active:false},
+            {icon:'🏠', label:'Panel General',     href:'/admin/dashboard',     active:true},
+            {icon:'👥', label:'Usuarios y Roles',  href:'/admin/usuarios',      active:false},
+            {icon:'📋', label:'Expedientes',        href:'/admin/expedientes',   active:false},
+            {icon:'💳', label:'Finanzas',           href:'/admin/finanzas',      active:false},
+            {icon:'📊', label:'Reportes',           href:'/admin/reportes',      active:false},
+            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs',          active:false},
             {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion', active:false},
           ].map(n => (
             <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
@@ -208,7 +190,11 @@ export default async function AdminDashboard() {
           <span className="topbar-title">Panel General</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/> En línea</div>
-            <div className="notif">🔔</div>
+            <TopbarActions
+              userId={user.id}
+              rol={profile?.rol ?? 'admin'}
+              nombre={profile?.nombre_completo}
+            />
           </div>
         </div>
         <div className="content">
@@ -217,10 +203,10 @@ export default async function AdminDashboard() {
 
           <div className="metrics">
             {[
-              {label:'Pacientes activos',    num:String(pacientesActivos ?? 0), sub:'base actual',                                   icon:'👥', cls:'icon-green'},
-              {label:'Sesiones hoy',         num:String(sesionesHoy),           sub:`${sesionesCompletadas} completadas`,            icon:'📅', cls:'icon-blue'},
-              {label:'Ingresos del mes',     num:`$${ingresosMes.toLocaleString('es-MX',{minimumFractionDigits:2})}`, sub:'pagos cobrados', icon:'💲', cls:'icon-amber'},
-              {label:'Usuarios del sistema', num:String(totalUsuarios ?? 0),    sub:`${rolesActivos} roles activos`,                 icon:'🛡', cls:'icon-red'},
+              {label:'Pacientes activos',    num:String(pacientesActivos ?? 0), sub:'base actual',                                              icon:'👥', cls:'icon-green'},
+              {label:'Sesiones hoy',         num:String(sesionesHoy),           sub:`${sesionesCompletadas} completadas`,                       icon:'📅', cls:'icon-blue'},
+              {label:'Ingresos del mes',     num:`$${ingresosMes.toLocaleString('es-MX',{minimumFractionDigits:2})}`, sub:'pagos cobrados',    icon:'💲', cls:'icon-amber'},
+              {label:'Usuarios del sistema', num:String(totalUsuarios ?? 0),    sub:`${rolesActivos} roles activos`,                            icon:'🛡', cls:'icon-red'},
             ].map(m => (
               <div className="metric" key={m.label}>
                 <div className="metric-label">{m.label}</div>
@@ -282,8 +268,6 @@ export default async function AdminDashboard() {
           </div>
         </div>
       </div>
-
-      <a href="#" className="chatbot-bubble" title="Asistente RC">💬</a>
     </>
   )
 }
