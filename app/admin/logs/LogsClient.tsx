@@ -1,23 +1,8 @@
 'use client'
 
-/**
- * LogsClient.tsx
- * ─────────────────────────────────────────────────────────────
- * F7 — Visor de logs de auditoría (Admin, solo lectura)
- *
- * SEGURIDAD:
- *   • Tabla audit_logs es APPEND-ONLY: sin botones de editar/eliminar
- *   • RLS: SELECT solo para admin (ya aplicado en el servidor)
- *   • Sirve para detectar accesos o modificaciones no autorizadas
- *
- * UNIDAD 2:
- *   • DOM dinámico → filtros por tipo de acción y tabla afectada
- *   • Eventos → búsqueda en tiempo real, filtros
- *   • Animaciones → fade-in de filas
- */
-
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import NotifBell from '@/app/components/NotifBell'
 
 interface LogEntry {
   id_logs: number
@@ -28,7 +13,11 @@ interface LogEntry {
   timestamp: string
   profiles?: { nombre_completo: string; rol: string } | null
 }
-interface Props { logsIniciales: LogEntry[] }
+interface Props { 
+  logsIniciales: LogEntry[]
+  currentUserId: string  // ← agregar
+}
+
 
 const ACCION_LABELS: Record<string,string> = {
   CREAR_PACIENTE:'Registro de paciente', EDITAR_PACIENTE:'Edición de paciente',
@@ -55,7 +44,7 @@ const TABLA_LABELS: Record<string,string> = {
   pacientes:'Pacientes', citas:'Citas', pagos:'Pagos', profiles:'Usuarios', expedientes:'Expedientes', progreso_sesiones:'Progreso'
 }
 
-export default function LogsClient({ logsIniciales }: Props) {
+export default function LogsClient({ logsIniciales, currentUserId }: Props) {
   const [busqueda, setBusqueda] = useState('')
   const [filtroTabla, setFiltroTabla] = useState('todas')
 
@@ -191,6 +180,7 @@ export default function LogsClient({ logsIniciales }: Props) {
             {icon:'📋', label:'Expedientes',        href:'/admin/expedientes', active:false},
             {icon:'💳', label:'Finanzas',           href:'/admin/finanzas', active:false},
             {icon:'📊', label:'Reportes',           href:'/admin/reportes', active:false},
+            {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
             {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs', active:true},
             {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion', active:false},
           ].map(n => (
@@ -209,7 +199,7 @@ export default function LogsClient({ logsIniciales }: Props) {
           <span className="topbar-title">Logs de Auditoría</span>
           <div className="topbar-right">
             <div className="live-badge"><div className="live-dot"/>En vivo</div>
-            <div className="notif">🔔</div>
+            <NotifBell userId={currentUserId} rol="admin" esAdmin />
           </div>
         </div>
 

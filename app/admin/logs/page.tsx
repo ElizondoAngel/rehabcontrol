@@ -29,5 +29,5 @@ export default async function LogsPage() {
     profiles: Array.isArray(l.profiles) ? (l.profiles[0] ?? null) : l.profiles,
   }))
 
-  return <LogsClient logsIniciales={logsNormalizados} />
+  return <LogsClient logsIniciales={logsNormalizados} currentUserId={user.id} />
 }

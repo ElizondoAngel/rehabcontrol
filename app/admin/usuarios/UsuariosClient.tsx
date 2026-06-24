@@ -21,6 +21,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import NotifBell from '@/app/components/NotifBell'
 
 interface Usuario {
   id: string
@@ -358,13 +359,14 @@ export default function UsuariosClient({ usuariosIniciales, currentUserId, pacie
         </div>
         <nav className="sb-nav">
           {[
-            {icon:'🏠', label:'Panel General',     href:'/admin/dashboard', active:false},
-            {icon:'👥', label:'Usuarios y Roles',  href:'/admin/usuarios',  active:true},
-            {icon:'📋', label:'Expedientes',        href:'/admin/expedientes', active:false},
-            {icon:'💳', label:'Finanzas',           href:'/admin/finanzas', active:false},
-            {icon:'📊', label:'Reportes',           href:'/admin/reportes', active:false},
-            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs', active:false},
-            {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion', active:false},
+            {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:false},
+            {icon:'👥', label:'Usuarios y Roles',    href:'/admin/usuarios',         active:false},
+            {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
+            {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},
+            {icon:'📊', label:'Reportes',             href:'/admin/reportes',         active:false},
+            {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
+            {icon:'🔍', label:'Logs de Auditoría',   href:'/admin/logs',             active:false},
+            {icon:'⚙️', label:'Configuración',        href:'/admin/configuracion',    active:false},
           ].map(n => (
             <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
               <span className="sb-nav-icon">{n.icon}</span>{n.label}
@@ -381,7 +383,7 @@ export default function UsuariosClient({ usuariosIniciales, currentUserId, pacie
           <span className="topbar-title">Usuarios y Roles</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
-            <div className="notif">🔔</div>
+            <NotifBell userId={currentUserId} rol="admin" esAdmin />
           </div>
         </div>
 

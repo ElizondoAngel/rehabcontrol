@@ -350,6 +350,7 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
             {icon:'📋', label:'Expedientes',        href:'/admin/expedientes',    active:false},
             {icon:'💳', label:'Finanzas',           href:'/admin/finanzas',       active:true},
             {icon:'📊', label:'Reportes',           href:'/admin/reportes',       active:false},
+            {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
             {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs',           active:false},
             {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion',  active:false},
           ].map(n => (
