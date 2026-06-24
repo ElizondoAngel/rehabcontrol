@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+export const dynamic = 'force-dynamic'
 
 const schema = z.object({
   telefono: z.string().regex(/^\d{10}$/, 'Teléfono inválido'),
@@ -13,6 +14,8 @@ export async function PATCH(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
+  console.log('🔍 USER ID EN API:', user.id)
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('rol')
@@ -24,18 +27,27 @@ export async function PATCH(req: Request) {
   }
 
   const body = await req.json()
+  console.log('🔍 BODY RECIBIDO:', body)
+
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
+    console.log('🔍 ERROR DE VALIDACIÓN ZOD:', parsed.error.format())
     return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  console.log('🔍 VALORES VALIDADOS:', parsed.data)
+
+  const { data: updateData, error } = await supabase
     .from('pacientes')
     .update({
       telefono: parsed.data.telefono,
       domicilio: parsed.data.domicilio,
     })
     .eq('profile_id', user.id)
+    .select()
+
+  console.log('🔍 FILAS ACTUALIZADAS:', updateData)
+  console.log('🔍 ERROR DE UPDATE:', error)
 
   if (error) return NextResponse.json({ error: 'Error al actualizar' }, { status: 500 })
 

@@ -9,10 +9,10 @@ export default function PagosClient({ profile, pagos }: any) {
 
   const pagosFiltrados = filtro === 'todos'
     ? pagos
-    : pagos.filter((p: any) => p.estado === filtro)
+    : pagos.filter((p: any) => p.estado_pago === filtro)
 
-  const totalPagado    = pagos.filter((p: any) => p.estado === 'pagado').reduce((acc: number, p: any) => acc + (p.monto ?? 0), 0)
-  const totalPendiente = pagos.filter((p: any) => p.estado === 'pendiente').reduce((acc: number, p: any) => acc + (p.monto ?? 0), 0)
+  const totalPagado    = pagos.filter((p: any) => p.estado_pago === 'pagado').reduce((acc: number, p: any) => acc + (p.monto ?? 0), 0)
+  const totalPendiente = pagos.filter((p: any) => p.estado_pago === 'pendiente').reduce((acc: number, p: any) => acc + (p.monto ?? 0), 0)
 
   return (
     <>
@@ -159,26 +159,35 @@ export default function PagosClient({ profile, pagos }: any) {
 
           <div className="tabla">
             <div className="tabla-header">
-              <span>Concepto</span>
+              <span>Método de pago</span>
               <span>Fecha</span>
               <span>Monto</span>
               <span>Estado</span>
             </div>
             {pagosFiltrados.length === 0
               ? <div className="empty">Sin registros de pago{filtro !== 'todos' ? ` con estado "${filtro}"` : ''}.</div>
-              : pagosFiltrados.map((p: any) => (
-                  <div className="pago-row" key={p.id}>
-                    <div>
-                      <div className="pago-concepto">{p.concepto ?? 'Sesión de terapia'}</div>
-                      <div className="pago-fecha">{p.fecha}</div>
+              : pagosFiltrados.map((p: any) => {
+                  const fecha = new Date(p.fecha_pago).toLocaleDateString('es-MX', {
+                    day: 'numeric', month: 'short', year: 'numeric'
+                  })
+                  return (
+                    <div className="pago-row" key={p.id_pago}>
+                      <div>
+                        <div className="pago-concepto">
+                          {p.metodo_pago ? p.metodo_pago.charAt(0).toUpperCase() + p.metodo_pago.slice(1) : 'Sesión de terapia'}
+                        </div>
+                      </div>
+                      <div className="pago-fecha">{fecha}</div>
+                      <div className="pago-monto">${p.monto}</div>
+                      <span className={`badge ${
+                        p.estado_pago === 'pagado' ? 'b-green' :
+                        p.estado_pago === 'pendiente' ? 'b-amber' : 'b-gray'
+                      }`}>
+                        {p.estado_pago}
+                      </span>
                     </div>
-                    <div className="pago-fecha">{p.fecha}</div>
-                    <div className="pago-monto">${p.monto}</div>
-                    <span className={`badge ${p.estado === 'pagado' ? 'b-green' : p.estado === 'pendiente' ? 'b-amber' : 'b-gray'}`}>
-                      {p.estado}
-                    </span>
-                  </div>
-                ))
+                  )
+                })
             }
           </div>
         </div>

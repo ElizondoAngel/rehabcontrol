@@ -23,7 +23,7 @@ export default function PacienteDashboardClient({
                     : dolorUltimo <= 3  ? 'Leve'
                     : dolorUltimo <= 6  ? 'Moderado' : 'Alto'
 
-  const pagosPendientes = ultimosPagos.filter((p: any) => p.estado === 'pendiente').length
+  const pagosPendientes = ultimosPagos.filter((p: any) => p.estado_pago === 'pendiente').length
   const proximaCita     = proximasCitas[0]
 
   return (
@@ -169,7 +169,11 @@ export default function PacienteDashboardClient({
             <div className="metric">
               <div className="metric-label">Próxima cita</div>
               <div className="metric-num" style={{fontSize:18}}>
-                {proximaCita ? `${proximaCita.fecha} · ${proximaCita.hora}` : 'Sin citas'}
+                {proximaCita
+                  ? new Date(proximaCita.fecha_hora).toLocaleString('es-MX', {
+                      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                    })
+                  : 'Sin citas'}
               </div>
               <div className="metric-sub">{proximaCita?.estado ?? '—'}</div>
               <div className="metric-icon icon-blue">🕐</div>
@@ -217,13 +221,20 @@ export default function PacienteDashboardClient({
               {proximasCitas.length === 0
                 ? <p className="empty">No tienes citas próximas.</p>
                 : proximasCitas.map((c: any) => (
-                    <div className="cita-row" key={c.id}>
+                    <div className="cita-row" key={c.id_cita}>
                       <div className="cita-icon">📅</div>
                       <div style={{flex:1}}>
-                        <div className="cita-date">{c.fecha} · {c.hora}</div>
-                        <div className="cita-doc">Sesión programada</div>
+                        <div className="cita-date">
+                          {new Date(c.fecha_hora).toLocaleString('es-MX', {
+                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </div>
+                        <div className="cita-doc">Sesión de terapia · {c.duracion_min} min</div>
                       </div>
-                      <span className={`badge ${c.estado === 'confirmada' ? 'b-green' : 'b-amber'}`}>
+                      <span className={`badge ${
+                        c.estado === 'completada' ? 'b-green' :
+                        c.estado === 'programada' ? 'b-amber' : 'b-gray'
+                      }`}>
                         {c.estado}
                       </span>
                     </div>
@@ -238,15 +249,23 @@ export default function PacienteDashboardClient({
               {ultimosPagos.length === 0
                 ? <p className="empty">Sin registros de pago aún.</p>
                 : ultimosPagos.map((p: any) => (
-                    <div className="pago-row" key={p.id}>
+                    <div className="pago-row" key={p.id_pago}>
                       <div>
-                        <div className="pago-name">{p.concepto ?? 'Sesión de terapia'}</div>
-                        <div className="pago-date">{p.fecha}</div>
+                        <div className="pago-name">
+                          {p.metodo_pago
+                            ? p.metodo_pago.charAt(0).toUpperCase() + p.metodo_pago.slice(1)
+                            : 'Sesión de terapia'}
+                        </div>
+                        <div className="pago-date">
+                          {new Date(p.fecha_pago).toLocaleDateString('es-MX', {
+                            day: 'numeric', month: 'short', year: 'numeric'
+                          })}
+                        </div>
                       </div>
                       <div className="pago-right">
                         <div className="pago-amount">${p.monto}</div>
-                        <span className={`badge ${p.estado === 'pagado' ? 'b-green' : 'b-amber'}`}>
-                          {p.estado}
+                        <span className={`badge ${p.estado_pago === 'pagado' ? 'b-green' : 'b-amber'}`}>
+                          {p.estado_pago}
                         </span>
                       </div>
                     </div>

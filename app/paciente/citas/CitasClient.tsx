@@ -11,7 +11,7 @@ export default function CitasClient({ profile, citas }: any) {
     ? citas
     : citas.filter((c: any) => c.estado === filtro)
 
-  const hoy = new Date().toISOString().split('T')[0]
+  const ahora = new Date()
 
   return (
     <>
@@ -123,7 +123,7 @@ export default function CitasClient({ profile, citas }: any) {
           <div className="page-sub">Solo lectura — no puedes crear ni cancelar citas desde aquí</div>
 
           <div className="filtros">
-            {['todas','confirmada','pendiente','cancelada'].map(f => (
+            {['todas','programada','completada','cancelada'].map(f => (
               <button
                 key={f}
                 className={`filtro-btn ${filtro === f ? 'activo' : ''}`}
@@ -138,25 +138,30 @@ export default function CitasClient({ profile, citas }: any) {
             {citasFiltradas.length === 0
               ? <div className="empty">No tienes citas {filtro !== 'todas' ? `con estado "${filtro}"` : 'registradas'}.</div>
               : citasFiltradas.map((c: any) => {
-                  const fecha = new Date(c.fecha + 'T00:00:00')
+                  const fecha = new Date(c.fecha_hora)
                   const dia   = fecha.getDate()
                   const mes   = fecha.toLocaleString('es-MX', { month: 'short' })
-                  const esFutura = c.fecha >= hoy
+                  const hora  = fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+                  const esFutura = fecha >= ahora
 
                   return (
-                    <div className="cita-card" key={c.id}>
+                    <div className="cita-card" key={c.id_cita}>
                       <div className="cita-fecha-box">
                         <div className="cita-dia">{dia}</div>
                         <div className="cita-mes">{mes}</div>
                       </div>
                       <div className="cita-info">
-                        <div className="cita-hora">{c.hora} hrs</div>
-                        <div className="cita-detalle">Sesión de terapia física</div>
-                        {esFutura && <span className="cita-tag">Próxima</span>}
+                        <div className="cita-hora">{hora} hrs</div>
+                        <div className="cita-detalle">
+                          Sesión de terapia física · {c.duracion_min} min
+                        </div>
+                        {esFutura && c.estado === 'programada' && (
+                          <span className="cita-tag">Próxima</span>
+                        )}
                       </div>
                       <span className={`badge ${
-                        c.estado === 'confirmada' ? 'b-green' :
-                        c.estado === 'pendiente'  ? 'b-amber' : 'b-gray'
+                        c.estado === 'completada' ? 'b-green' :
+                        c.estado === 'programada' ? 'b-amber' : 'b-gray'
                       }`}>
                         {c.estado}
                       </span>

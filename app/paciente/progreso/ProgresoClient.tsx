@@ -13,8 +13,7 @@ export default function ProgresoClient({ profile, progreso, contrato }: any) {
   const movilidadProm = progreso.length > 0
     ? Math.round(progreso.reduce((acc: number, s: any) => acc + (s.movilidad ?? 0), 0) / progreso.length)
     : 0
-
-  const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
+const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
   const dolorTexto  = dolorUltimo === 0 ? 'Sin dolor'
                     : dolorUltimo <= 3  ? 'Leve'
                     : dolorUltimo <= 6  ? 'Moderado' : 'Alto'
@@ -207,7 +206,7 @@ export default function ProgresoClient({ profile, progreso, contrato }: any) {
                   return (
                     <div className="sesion-card" key={s.id}>
                       <div className="sesion-top">
-                        <span className="sesion-fecha">{s.fecha_sesion}</span>
+                      <span className="sesion-fecha">{new Date(s.fecha_registro).toLocaleDateString('es-MX')}</span>
                         <span className="sesion-num">Sesión #{progreso.length - i}</span>
                       </div>
                       <div className="sesion-stats">
@@ -224,8 +223,8 @@ export default function ProgresoClient({ profile, progreso, contrato }: any) {
                           <span className="sstat-val">{s.ejercicios_completados ?? 0}</span>
                         </div>
                       </div>
-                      {s.notas && (
-                        <div className="sesion-nota">📝 {s.notas}</div>
+                     {s.observaciones && (
+                    <div className="sesion-nota">📝 {s.observaciones}</div>
                       )}
                     </div>
                   )
