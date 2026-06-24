@@ -2,12 +2,11 @@
 
 /**
  * components/TopbarActions.tsx
- * Wrapper client component que agrupa NotifBell y Chatbot.
- * Se usa en todos los dashboards (server components) para poder
- * incluir componentes client sin convertir todo el dashboard.
+ * Wrapper client component que incluye solo NotifBell.
+ * El Chatbot se maneja por separado en cada dashboard.
  *
- * USO en cualquier server component:
- *   import TopbarActions from '@/components/TopbarActions'
+ * USO en server components:
+ *   import TopbarActions from '@/app/components/TopbarActions'
  *   <TopbarActions userId={user.id} rol={profile.rol} nombre={profile.nombre_completo} />
  */
 
@@ -21,13 +20,10 @@ interface Props {
 
 export default function TopbarActions({ userId, rol, nombre }: Props) {
   return (
-    <>
-      {/* Campana de notificaciones — va dentro del topbar */}
-      <NotifBell
-        userId={userId}
-        rol={rol}
-        esAdmin={rol === 'admin'}
-      />
-    </>
+    <NotifBell
+      userId={userId}
+      rol={rol}
+      esAdmin={rol === 'admin'}
+    />
   )
 }

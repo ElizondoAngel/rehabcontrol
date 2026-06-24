@@ -167,13 +167,14 @@ export default async function AdminDashboard() {
         </div>
         <nav className="sb-nav">
           {[
-            {icon:'🏠', label:'Panel General',     href:'/admin/dashboard',     active:true},
-            {icon:'👥', label:'Usuarios y Roles',  href:'/admin/usuarios',      active:false},
-            {icon:'📋', label:'Expedientes',        href:'/admin/expedientes',   active:false},
-            {icon:'💳', label:'Finanzas',           href:'/admin/finanzas',      active:false},
-            {icon:'📊', label:'Reportes',           href:'/admin/reportes',      active:false},
-            {icon:'🔍', label:'Logs de Auditoría', href:'/admin/logs',          active:false},
-            {icon:'⚙️', label:'Configuración',      href:'/admin/configuracion', active:false},
+            {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:true},
+            {icon:'👥', label:'Usuarios y Roles',    href:'/admin/usuarios',         active:false},
+            {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
+            {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},
+            {icon:'📊', label:'Reportes',             href:'/admin/reportes',         active:false},
+            {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
+            {icon:'🔍', label:'Logs de Auditoría',   href:'/admin/logs',             active:false},
+            {icon:'⚙️', label:'Configuración',        href:'/admin/configuracion',    active:false},
           ].map(n => (
             <Link key={n.label} href={n.href} className={n.active ? 'active' : ''}>
               <span className="sb-nav-icon">{n.icon}</span>{n.label}
@@ -203,10 +204,10 @@ export default async function AdminDashboard() {
 
           <div className="metrics">
             {[
-              {label:'Pacientes activos',    num:String(pacientesActivos ?? 0), sub:'base actual',                                              icon:'👥', cls:'icon-green'},
-              {label:'Sesiones hoy',         num:String(sesionesHoy),           sub:`${sesionesCompletadas} completadas`,                       icon:'📅', cls:'icon-blue'},
-              {label:'Ingresos del mes',     num:`$${ingresosMes.toLocaleString('es-MX',{minimumFractionDigits:2})}`, sub:'pagos cobrados',    icon:'💲', cls:'icon-amber'},
-              {label:'Usuarios del sistema', num:String(totalUsuarios ?? 0),    sub:`${rolesActivos} roles activos`,                            icon:'🛡', cls:'icon-red'},
+              {label:'Pacientes activos',    num:String(pacientesActivos ?? 0), sub:'base actual',                                           icon:'👥', cls:'icon-green'},
+              {label:'Sesiones hoy',         num:String(sesionesHoy),           sub:`${sesionesCompletadas} completadas`,                    icon:'📅', cls:'icon-blue'},
+              {label:'Ingresos del mes',     num:`$${ingresosMes.toLocaleString('es-MX',{minimumFractionDigits:2})}`, sub:'pagos cobrados', icon:'💲', cls:'icon-amber'},
+              {label:'Usuarios del sistema', num:String(totalUsuarios ?? 0),    sub:`${rolesActivos} roles activos`,                         icon:'🛡', cls:'icon-red'},
             ].map(m => (
               <div className="metric" key={m.label}>
                 <div className="metric-label">{m.label}</div>
