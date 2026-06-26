@@ -7,7 +7,7 @@
  *
  * UNIDAD 2 — Desarrollo Web Profesional:
  *   1. Manipulación del DOM   → filtro búsqueda, lista dinámica, modal mount/unmount
- *   2. Fetch API asíncrona    → registro, edición y baja vía /api/pacientes
+ *   2. Fetch API asíncrona    → registro, edición y baja vía /api/paciente
  *   3. Eventos                → click, input, scroll, mouseover
  *   4. Animaciones            → fade-in cards, slide modal, hover rows, toast
  *   5. Interacción profesional→ Toast, Modal, Loader, Badge dinámico
@@ -19,9 +19,10 @@
  *   • Permisos verificados en Server Component padre
  */
 
-import NotifBell from '@/app/components/NotifBell'
-import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useState, useEffect, useRef } from 'react'
+import NotifBell from '@/app/components/NotifBell'
+import Sidebar, { MenuButton } from '@/app/components/Sidebar'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Terapeuta { id: string; nombre_completo: string }
@@ -207,7 +208,7 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
     }
 
     // Fetch API asíncrona — segunda capa de validación en servidor
-    const res = await fetch('/api/pacientes', {
+    const res = await fetch('/api/paciente', {
       method:  modoEdicion ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(modoEdicion ? { ...payload, id: modoEdicion.id_paciente } : payload),
@@ -235,7 +236,7 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
   // ── BAJA / REACTIVACIÓN DE PACIENTE ───────────────────────────
   async function cambiarEstado(p: Paciente, nuevoEstado: boolean) {
     setLoading(true)
-    const res = await fetch('/api/pacientes', {
+    const res = await fetch('/api/paciente', {
       method:  'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ id: p.id_paciente, activo: nuevoEstado }),
@@ -265,26 +266,6 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
           --red:#F25555;--amber:#F5B400;--green:#34D399;
         }
         body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
-
-        /* SIDEBAR */
-        .sidebar{width:260px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-        .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
-        .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;box-shadow:0 0 18px rgba(56,189,248,0.3)}
-        .sb-name{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
-        .sb-ver{font-size:10px;color:var(--muted)}
-        .sb-role{margin:12px 12px 4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:32px;height:32px;border-radius:9px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-        .sb-role-name{font-size:13px;font-weight:600;color:var(--text)}
-        .sb-role-sub{font-size:11px;color:var(--cyan)}
-        .sb-nav{flex:1;padding:8px 10px}
-        .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .18s;margin-bottom:2px}
-        .sb-nav a:hover{background:var(--surface2);color:var(--text)}
-        .sb-nav a.active{background:linear-gradient(135deg,rgba(37,99,235,0.18),rgba(56,189,248,0.12));color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(56,189,248,0.2)}
-        .sb-nav-icon{font-size:16px;width:20px;text-align:center}
-        .sb-bottom{padding:12px 10px;border-top:1px solid var(--border)}
-        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .18s}
-        .sb-bottom a:hover{color:var(--red)}
 
         /* MAIN */
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -401,40 +382,30 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
         @keyframes spin    { to{transform:rotate(360deg)} }
         @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.5} }
       `}</style>
-      {/* SIDEBAR */}
-      <div className="sidebar">
-        <div className="sb-brand">
-          <div className="sb-logo-row">
-            <div className="sb-logo">RC</div>
-            <div><div className="sb-name">RehabControl</div><div className="sb-ver">v2.1</div></div>
-          </div>
-        </div>
-        <div className="sb-role">
-          <div className="sb-role-icon">📁</div>
-          <div><div className="sb-role-name">Secretaria</div><div className="sb-role-sub">Acceso Operativo</div></div>
-        </div>
-        <nav className="sb-nav">
-          {[
-            {icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false},
-            {icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:false},
-            {icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:true},
-            {icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false},
-          ].map(n => (
-            <Link key={n.label} href={n.href} className={n.active?'active':''}>
-              <span className="sb-nav-icon">{n.icon}</span>{n.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="sb-bottom">
-          <Link href="/login"><span className="sb-nav-icon">→</span> Cerrar Sesión</Link>
-        </div>
-      </div>
+
+      <Sidebar
+          rol="secretaria"
+          nombre="Secretaria"
+          subRol="Acceso Operativo"
+          icono="📁"
+          items={[
+            { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
+            { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:false },
+            { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:true },
+            { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false },
+          ]}
+        />
 
       {/* MAIN */}
       <div className="main">
         {/* Topbar con transición suave al hacer scroll */}
         <div className={`topbar${scrolled?' scrolled':''}`}>
-          <span className="topbar-title">Gestión de Pacientes</span>
+
+          <div style={{display:'flex', alignItems:'center', gap:12}}>
+            <MenuButton />
+            <span className="topbar-title">Pacientes</span>
+          </div>
+
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
             <NotifBell userId={currentUserId} rol="secretaria" />
