@@ -2,14 +2,130 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+// ── DATOS NUEVOS ─────────────────────────────────────────────
+const terapeutas = [
+  {
+    ini: "MA", nombre: "Lic. María Alejandra Ruiz Vega", titulo: "Fisioterapeuta Ortopédica",
+    color: "#2563EB", egreso: "Universidad Nacional Autónoma de México · 2009",
+    diplomados: ["Terapia Manual Ortopédica — UNAM", "Punción Seca Nivel I y II", "Rehabilitación Deportiva Avanzada"],
+    experiencia: "15 años en rehabilitación musculoesquelética",
+    especialidades: ["Rehabilitación post-quirúrgica", "Lesiones de columna", "Recuperación de fractura"],
+  },
+  {
+    ini: "CR", nombre: "Lic. Carlos Roberto Mendoza", titulo: "Fisioterapeuta Deportivo",
+    color: "#0F6E56", egreso: "Instituto Politécnico Nacional · 2013",
+    diplomados: ["Fisioterapia Deportiva — CONADE", "Readaptación Funcional al Deporte", "Kinesiotaping Avanzado"],
+    experiencia: "11 años con deportistas y atletas recreativos",
+    especialidades: ["Lesiones deportivas", "Readaptación funcional", "Vendaje neuromuscular"],
+  },
+  {
+    ini: "LP", nombre: "Lic. Laura Patricia Sánchez", titulo: "Fisioterapeuta Geriátrica",
+    color: "#7F77DD", egreso: "Universidad Iberoamericana · 2011",
+    diplomados: ["Gerontología Clínica — UNAM", "Prevención de Caídas en Adulto Mayor", "Ejercicio Terapéutico Avanzado"],
+    experiencia: "13 años en atención al adulto mayor",
+    especialidades: ["Equilibrio y marcha", "Prevención de caídas", "Mantenimiento funcional"],
+  },
+  {
+    ini: "JE", nombre: "Lic. José Ernesto Vargas", titulo: "Terapeuta Manual y Postural",
+    color: "#D85A30", egreso: "Universidad La Salle · 2015",
+    diplomados: ["Osteopatía Estructural — Escuela Mexicana de Osteopatía", "Reeducación Postural Global (RPG)", "Electroterapia Clínica"],
+    experiencia: "9 años en terapia manual y dolor crónico",
+    especialidades: ["Terapia manual", "Corrección postural", "Punción seca", "Electroterapia"],
+  },
+]
+
+const instalaciones = [
+  { icon: "🏥", nombre: "Área de fisioterapia general", desc: "4 cubículos individuales equipados con camillas regulables, privacidad garantizada para cada paciente." },
+  { icon: "⚡", nombre: "Sala de electroterapia", desc: "Equipos de TENS, electroestimulación muscular, ultrasonido terapéutico y láser de baja potencia." },
+  { icon: "💪", nombre: "Gimnasio de rehabilitación", desc: "Área de ejercicio terapéutico con ligas, mancuernas, barras paralelas, escalera de dedos y bandas." },
+  { icon: "🔬", nombre: "Área de valoración", desc: "Espacio dedicado a evaluaciones funcionales, goniometría y pruebas de fuerza muscular." },
+]
+
+const paquetes = [
+  { nombre: "Paquete Básico",    sesiones: 5,  precio: 1600, desc: "Ideal para lesiones simples o recuperaciones cortas.", popular: false },
+  { nombre: "Paquete Estándar", sesiones: 10, precio: 3000, desc: "El más elegido. Mayor continuidad de tratamiento.",    popular: true  },
+  { nombre: "Paquete Premium",  sesiones: 20, precio: 5500, desc: "Para tratamientos prolongados. Incluye evaluación mensual de progreso.", popular: false },
+]
+
+const galeria = [
+  { id: 1, emoji: "🏋️", titulo: "Rehabilitación de rodilla",    terapia: "Rehabilitación ortopédica",  duracion: "8 semanas · 16 sesiones",  desc: "Ejercicios de fortalecimiento del cuádriceps post-artroscopia. El paciente recuperó el 100% de la movilidad en 8 semanas." },
+  { id: 2, emoji: "🧘", titulo: "Terapia postural",              terapia: "Rehabilitación postural",    duracion: "6 semanas · 12 sesiones",  desc: "Reeducación postural global para dolor lumbar crónico. Reducción del dolor de 8/10 a 2/10 en 12 sesiones." },
+  { id: 3, emoji: "⚡", titulo: "Electroterapia de hombro",      terapia: "Electroterapia",             duracion: "5 semanas · 10 sesiones",  desc: "Aplicación de TENS y ultrasonido en tendinitis de manguito rotador. Resolución completa en 10 sesiones." },
+  { id: 4, emoji: "🏃", titulo: "Readaptación deportiva",        terapia: "Fisioterapia deportiva",     duracion: "16 semanas · 30 sesiones", desc: "Vuelta al deporte tras rotura de ligamento cruzado anterior. Atleta regresó a la cancha en 4 meses." },
+  { id: 5, emoji: "👴", titulo: "Rehabilitación geriátrica",     terapia: "Rehabilitación geriátrica", duracion: "10 semanas · 20 sesiones", desc: "Mejora de equilibrio y marcha en adulto mayor de 78 años. Reducción del riesgo de caídas en un 70%." },
+  { id: 6, emoji: "💆", titulo: "Terapia manual cervical",       terapia: "Terapia manual",             duracion: "4 semanas · 8 sesiones",   desc: "Tratamiento de cefalea tensional y contractura cervical. Resolución de síntomas en 8 sesiones." },
+]
+
+// ── MODAL TERAPEUTA ──────────────────────────────────────────
+function TerapeutaModal({ t, onClose }: { t: typeof terapeutas[0]; onClose: () => void }) {
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
+      <div style={{background:'#0A1220',border:'1px solid rgba(255,255,255,0.1)',borderRadius:20,padding:32,maxWidth:520,width:'100%',position:'relative'}} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{position:'absolute',top:16,right:16,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,width:32,height:32,color:'#8C9BB5',cursor:'pointer',fontSize:16}}>✕</button>
+        <div style={{display:'flex',gap:16,alignItems:'center',marginBottom:24}}>
+          <div style={{width:64,height:64,borderRadius:'50%',background:t.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:700,color:'#fff',flexShrink:0}}>{t.ini}</div>
+          <div>
+            <div style={{fontSize:17,fontWeight:700,color:'#E7EDF7'}}>{t.nombre}</div>
+            <div style={{fontSize:13,color:'#38BDF8',marginTop:3}}>{t.titulo}</div>
+            <div style={{fontSize:12,color:'#8C9BB5',marginTop:2}}>📅 {t.experiencia}</div>
+          </div>
+        </div>
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#8C9BB5',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>Egresado de</div>
+          <div style={{fontSize:13,color:'#E7EDF7',background:'rgba(255,255,255,0.04)',borderRadius:9,padding:'10px 13px'}}>{t.egreso}</div>
+        </div>
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#8C9BB5',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>Diplomados y certificaciones</div>
+          {t.diplomados.map((d,i) => (
+            <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
+              <div style={{width:6,height:6,borderRadius:'50%',background:t.color,flexShrink:0}}/>
+              <div style={{fontSize:13,color:'#E7EDF7'}}>{d}</div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:'#8C9BB5',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>Especialidades</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:7}}>
+            {t.especialidades.map((e,i) => (
+              <span key={i} style={{background:`${t.color}22`,color:t.color,border:`1px solid ${t.color}44`,borderRadius:100,fontSize:11,fontWeight:600,padding:'4px 11px'}}>{e}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── MODAL GALERÍA ────────────────────────────────────────────
+function GaleriaModal({ item, onClose }: { item: typeof galeria[0]; onClose: () => void }) {
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
+      <div style={{background:'#0A1220',border:'1px solid rgba(56,189,248,0.2)',borderRadius:20,padding:32,maxWidth:440,width:'100%',position:'relative',textAlign:'center'}} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{position:'absolute',top:16,right:16,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,width:32,height:32,color:'#8C9BB5',cursor:'pointer',fontSize:16}}>✕</button>
+        <div style={{fontSize:52,marginBottom:16}}>{item.emoji}</div>
+        <div style={{fontSize:18,fontWeight:700,color:'#E7EDF7',marginBottom:8}}>{item.titulo}</div>
+        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(56,189,248,0.12)',border:'1px solid rgba(56,189,248,0.25)',borderRadius:100,padding:'4px 12px',marginBottom:16}}>
+          <span style={{fontSize:11,fontWeight:600,color:'#38BDF8'}}>{item.terapia}</span>
+        </div>
+        <p style={{fontSize:14,color:'#8C9BB5',lineHeight:1.75,marginBottom:16}}>{item.desc}</p>
+        <div style={{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 14px',fontSize:12,color:'#8C9BB5'}}>⏱ {item.duracion}</div>
+      </div>
+    </div>
+  )
+}
+
+// ── COMPONENTE PRINCIPAL ─────────────────────────────────────
 export default function LandingPage() {
+  const [terapeutaModal, setTerapeutaModal] = useState<typeof terapeutas[0] | null>(null)
+  const [galeriaModal, setGaleriaModal]     = useState<typeof galeria[0] | null>(null)
+  const [hoveredGaleria, setHoveredGaleria] = useState<number | null>(null)
+
   return (
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-          /* Paleta idéntica al login/admin — azul tech oscuro */
           --bg:        #060B14;
           --bg-2:      #0A1220;
           --surface:   rgba(255,255,255,0.035);
@@ -20,7 +136,6 @@ export default function LandingPage() {
           --cyan:      #38BDF8;
           --text:      #E7EDF7;
           --muted:     #8C9BB5;
-          /* Secciones claras — sin blanco puro, tinte azulado suave */
           --light-bg:    #EEF4FB;
           --light-bg-2:  #E2EDF7;
           --light-card:  #FFFFFF;
@@ -205,10 +320,12 @@ export default function LandingPage() {
         .stat-lbl { font-size:13px; color:var(--text); font-weight:500; }
         .stat-sub { font-size:11.5px; color:var(--muted); margin-top:2px; }
 
-        /* ── TRANSICIÓN suave oscuro → claro azulado ── */
-        .fade-to-light { height:72px; background:linear-gradient(180deg,var(--bg-2) 0%,var(--light-bg) 100%); }
-        .fade-to-dark  { height:72px; background:linear-gradient(180deg,var(--light-bg-2) 0%,var(--bg-2) 100%); }
-        .fade-to-light2{ height:72px; background:linear-gradient(180deg,var(--bg-2) 0%,var(--light-bg) 100%); }
+        /* ── TRANSICIONES ── */
+        .fade-to-light  { height:72px; background:linear-gradient(180deg,var(--bg-2) 0%,var(--light-bg) 100%); }
+        .fade-to-dark   { height:72px; background:linear-gradient(180deg,var(--light-bg-2) 0%,var(--bg-2) 100%); }
+        .fade-to-light2 { height:72px; background:linear-gradient(180deg,var(--bg-2) 0%,var(--light-bg) 100%); }
+        .fade-dark-light { height:72px; background:linear-gradient(180deg,var(--bg-2) 0%,var(--light-bg-2) 100%); }
+        .fade-light-dark { height:72px; background:linear-gradient(180deg,var(--light-bg-2) 0%,var(--bg-2) 100%); }
 
         /* ── SECCIONES CLARAS ── */
         .light-section { background:var(--light-bg); color:var(--light-text); }
@@ -223,11 +340,14 @@ export default function LandingPage() {
         }
         .section-tag::before { content:''; width:20px; height:2.5px; background:var(--blue); border-radius:2px; flex-shrink:0; }
         .section-tag.center { justify-content:center; width:100%; }
+        .section-tag.cyan { color:var(--cyan); }
+        .section-tag.cyan::before { background:var(--cyan); }
         .section-title {
           font-weight:800;
           font-size:clamp(30px,4vw,50px); line-height:1.1; letter-spacing:-0.02em;
           color:var(--light-text); margin-bottom:18px;
         }
+        .section-title-dark { color:#fff; }
         .section-body { font-size:16px; color:var(--light-muted); line-height:1.85; font-weight:400; }
 
         /* ── NOSOTROS ── */
@@ -270,6 +390,24 @@ export default function LandingPage() {
         .valor-titulo { font-size:14px; font-weight:700; color:var(--light-text); }
         .valor-desc   { font-size:12.5px; color:var(--light-muted); margin-top:2px; }
 
+        /* ── EQUIPO ── */
+        .equipo-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+        .terapeuta-card {
+          background:var(--light-card); border:1px solid var(--light-border);
+          border-radius:18px; padding:28px 20px; text-align:center; cursor:pointer;
+          transition:transform .2s, box-shadow .2s, border-color .2s;
+        }
+        .terapeuta-card:hover { transform:translateY(-6px); box-shadow:0 16px 40px rgba(37,99,235,0.14); border-color:var(--blue); }
+
+        /* ── INSTALACIONES ── */
+        .instalaciones-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:18px; max-width:780px; margin:0 auto; }
+        .instalacion-card {
+          background:rgba(255,255,255,0.04); border:1px solid var(--border);
+          border-radius:16px; padding:24px 22px;
+          transition:border-color .2s, transform .2s;
+        }
+        .instalacion-card:hover { border-color:rgba(56,189,248,0.3); transform:translateY(-4px); }
+
         /* ── SERVICIOS ── */
         .servicios-header { text-align:center; margin-bottom:58px; }
         .servicios-sub { font-size:16px; color:var(--light-muted); max-width:540px; margin:14px auto 0; line-height:1.75; }
@@ -296,7 +434,36 @@ export default function LandingPage() {
         .servicio-nombre { font-size:16px; font-weight:700; color:var(--light-text); margin-bottom:10px; letter-spacing:-0.01em; }
         .servicio-desc   { font-size:13.5px; color:var(--light-muted); line-height:1.7; }
 
-        /* ── PROCESO ── oscuro como el admin ── */
+        /* ── GALERÍA ── */
+        .galeria-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+        .galeria-card {
+          background:var(--light-card); border:1px solid var(--light-border);
+          border-radius:18px; overflow:hidden; cursor:pointer;
+          transition:transform .2s, box-shadow .2s;
+        }
+        .galeria-thumb {
+          height:140px;
+          background:linear-gradient(135deg,rgba(37,99,235,0.1),rgba(56,189,248,0.08));
+          display:flex; align-items:center; justify-content:center;
+          font-size:52px; position:relative; overflow:hidden;
+        }
+        .galeria-overlay {
+          position:absolute; inset:0;
+          background:rgba(37,99,235,0.88);
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          gap:8px; opacity:0; transition:opacity .2s;
+        }
+        .galeria-card:hover .galeria-overlay { opacity:1; }
+
+        /* ── PRECIOS ── */
+        .precios-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; max-width:900px; margin:0 auto; }
+        .precio-card {
+          border-radius:20px; padding:32px 26px; position:relative;
+          transition:transform .2s;
+        }
+        .precio-card:hover { transform:translateY(-4px); }
+
+        /* ── PROCESO ── */
         .proceso-section { background:var(--bg-2); padding:96px 6%; }
         .proceso-header  { text-align:center; margin-bottom:58px; }
         .proceso-header .section-title { color:#fff; }
@@ -425,7 +592,7 @@ export default function LandingPage() {
         .footer-links a { font-size:13px; color:var(--muted); text-decoration:none; font-weight:500; transition:color .2s; }
         .footer-links a:hover { color:var(--cyan); }
 
-        /* ── ANIM ── */
+        /* ── ANIMACIONES ── */
         @keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
         .a1{animation:fadeUp .6s .05s ease both}
         .a2{animation:fadeUp .6s .15s ease both}
@@ -443,12 +610,18 @@ export default function LandingPage() {
           .stat-item{border-right:none;border-bottom:1px solid var(--border)}
           .aviso-sistema{flex-direction:column;text-align:center}
           .check-list{grid-template-columns:1fr}
+          .equipo-grid{grid-template-columns:repeat(2,1fr)}
+          .galeria-grid{grid-template-columns:repeat(2,1fr)}
+          .precios-grid{grid-template-columns:1fr}
+          .instalaciones-grid{grid-template-columns:1fr}
           footer{flex-direction:column;align-items:center;text-align:center}
         }
         @media(max-width:500px){
           .proceso-grid{grid-template-columns:1fr}
           .hero-title{font-size:36px}
           .servicios-grid{grid-template-columns:1fr}
+          .equipo-grid{grid-template-columns:1fr}
+          .galeria-grid{grid-template-columns:1fr}
         }
       `}</style>
 
@@ -464,14 +637,17 @@ export default function LandingPage() {
         <ul className="nav-links">
           <li><a href="#inicio">Inicio</a></li>
           <li><a href="#nosotros">Nosotros</a></li>
+          <li><a href="#equipo">Equipo</a></li>
           <li><a href="#servicios">Servicios</a></li>
+          <li><a href="#instalaciones">Instalaciones</a></li>
+          <li><a href="#galeria">Galería</a></li>
           <li><a href="#proceso">Cómo funciona</a></li>
           <li><a href="#contacto">Contacto</a></li>
         </ul>
         <Link href="/login" className="nav-cta">Portal de pacientes →</Link>
       </nav>
 
-      {/* ── HERO ── */}
+      {/* ── HERO (original intacto) ── */}
       <section className="hero" id="inicio">
         <div className="hero-grid"/>
         <div className="hero-glow1"/>
@@ -496,9 +672,9 @@ export default function LandingPage() {
               <div className="preview-card">
                 <div className="preview-label">Seguimiento de tratamientos</div>
                 {[
-                  {ini:'MR', name:'Paciente en tratamiento', sub:'Sesión 7 de 10 · Plan activo',         pill:'En progreso',    cls:'pill-ok'},
-                  {ini:'AG', name:'Paciente en tratamiento', sub:'Evaluación inicial completada',         pill:'Activo',         cls:'pill-ok'},
-                  {ini:'CL', name:'Paciente en tratamiento', sub:'Próxima cita: mañana 10:00 am',        pill:'Pendiente',      cls:'pill-pen'},
+                  {ini:'MR', name:'Paciente en tratamiento', sub:'Sesión 7 de 10 · Plan activo',      pill:'En progreso', cls:'pill-ok'},
+                  {ini:'AG', name:'Paciente en tratamiento', sub:'Evaluación inicial completada',      pill:'Activo',      cls:'pill-ok'},
+                  {ini:'CL', name:'Paciente en tratamiento', sub:'Próxima cita: mañana 10:00 am',     pill:'Pendiente',   cls:'pill-pen'},
                 ].map((p,i) => (
                   <div className="preview-row" key={i}>
                     <div className="preview-avatar">{p.ini}</div>
@@ -528,7 +704,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── STATS ── */}
+      {/* ── STATS (original intacto) ── */}
       <div className="stats-strip">
         <div className="stats-inner">
           {[
@@ -546,11 +722,10 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Transición suave oscuro → claro azulado */}
       <div className="fade-to-light"/>
 
       <div className="light-section">
-        {/* ── NOSOTROS ── */}
+        {/* ── NOSOTROS (original intacto) ── */}
         <section id="nosotros">
           <div className="container quienes-grid">
             <div>
@@ -586,8 +761,29 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ── SERVICIOS ── */}
-        <section id="servicios" style={{background:'var(--light-bg-2)'}}>
+        {/* ── EQUIPO (NUEVO) ── */}
+        <section id="equipo" style={{background:'var(--light-bg-2)'}}>
+          <div className="container">
+            <div style={{textAlign:'center', marginBottom:52}}>
+              <div className="section-tag center">Nuestro equipo</div>
+              <h2 className="section-title">Los profesionales que<br/><span className="grad">te van a atender</span></h2>
+              <p className="section-body" style={{maxWidth:520, margin:'0 auto'}}>Haz clic en cualquier terapeuta para ver su formación académica, diplomados y especialidades.</p>
+            </div>
+            <div className="equipo-grid">
+              {terapeutas.map(t => (
+                <div key={t.ini} className="terapeuta-card" onClick={() => setTerapeutaModal(t)}>
+                  <div style={{width:72, height:72, borderRadius:'50%', background:t.color, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:700, color:'#fff', margin:'0 auto 16px'}}>{t.ini}</div>
+                  <div style={{fontSize:14, fontWeight:700, color:'var(--light-text)', marginBottom:5, lineHeight:1.3}}>{t.nombre}</div>
+                  <div style={{fontSize:12, color:'var(--blue)', fontWeight:600, marginBottom:10}}>{t.titulo}</div>
+                  <div style={{fontSize:11, color:'var(--light-muted)', background:'rgba(37,99,235,0.06)', borderRadius:100, padding:'4px 11px', display:'inline-block'}}>Ver perfil →</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── SERVICIOS (original intacto) ── */}
+        <section id="servicios">
           <div className="container">
             <div className="servicios-header">
               <div className="section-tag center">Servicios</div>
@@ -596,12 +792,12 @@ export default function LandingPage() {
             </div>
             <div className="servicios-grid">
               {[
-                {icon:'🦴', nombre:'Rehabilitación ortopédica',      desc:'Recuperación post-quirúrgica, fracturas, prótesis, lesiones articulares y musculoesqueléticas en general.'},
-                {icon:'⚽', nombre:'Fisioterapia deportiva',         desc:'Recuperación de lesiones por deporte, readaptación funcional y regreso seguro a la actividad física.'},
-                {icon:'🧓', nombre:'Rehabilitación geriátrica',      desc:'Programa para adultos mayores: mejora de equilibrio, prevención de caídas y mantenimiento funcional.'},
-                {icon:'💪', nombre:'Terapia manual y masoterapia',   desc:'Técnicas manuales, liberación miofascial, punción seca y manipulación articular terapéutica.'},
-                {icon:'🔄', nombre:'Rehabilitación postural',        desc:'Corrección de alteraciones posturales, escoliosis funcional y dolor crónico de columna vertebral.'},
-                {icon:'⚡', nombre:'Electroterapia y ultrasonido',   desc:'Equipos de electroterapia, ultrasonido terapéutico y láser para acelerar la recuperación tisular.'},
+                {icon:'🦴', nombre:'Rehabilitación ortopédica',    desc:'Recuperación post-quirúrgica, fracturas, prótesis, lesiones articulares y musculoesqueléticas en general.'},
+                {icon:'⚽', nombre:'Fisioterapia deportiva',       desc:'Recuperación de lesiones por deporte, readaptación funcional y regreso seguro a la actividad física.'},
+                {icon:'🧓', nombre:'Rehabilitación geriátrica',    desc:'Programa para adultos mayores: mejora de equilibrio, prevención de caídas y mantenimiento funcional.'},
+                {icon:'💪', nombre:'Terapia manual y masoterapia', desc:'Técnicas manuales, liberación miofascial, punción seca y manipulación articular terapéutica.'},
+                {icon:'🔄', nombre:'Rehabilitación postural',      desc:'Corrección de alteraciones posturales, escoliosis funcional y dolor crónico de columna vertebral.'},
+                {icon:'⚡', nombre:'Electroterapia y ultrasonido', desc:'Equipos de electroterapia, ultrasonido terapéutico y láser para acelerar la recuperación tisular.'},
               ].map(s => (
                 <div className="servicio-card" key={s.nombre}>
                   <div className="servicio-icon">{s.icon}</div>
@@ -614,10 +810,94 @@ export default function LandingPage() {
         </section>
       </div>
 
-      {/* Transición claro → oscuro */}
+      {/* ── INSTALACIONES (NUEVO, sección oscura) ── */}
       <div className="fade-to-dark"/>
+      <section id="instalaciones" style={{background:'var(--bg-2)', padding:'96px 6%'}}>
+        <div className="container">
+          <div style={{textAlign:'center', marginBottom:52}}>
+            <div className="section-tag center cyan">Instalaciones</div>
+            <h2 className="section-title section-title-dark">Espacio clínico<br/><span className="grad">diseñado para tu recuperación</span></h2>
+            <p style={{fontSize:16, color:'var(--muted)', maxWidth:520, margin:'0 auto'}}>Contamos con áreas especializadas y equipos de última generación para ofrecerte la mejor atención.</p>
+          </div>
+          <div className="instalaciones-grid">
+            {instalaciones.map(inst => (
+              <div key={inst.nombre} className="instalacion-card">
+                <div style={{fontSize:32, marginBottom:14}}>{inst.icon}</div>
+                <div style={{fontSize:15, fontWeight:700, color:'var(--text)', marginBottom:8}}>{inst.nombre}</div>
+                <div style={{fontSize:13, color:'var(--muted)', lineHeight:1.7}}>{inst.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* ── PROCESO ── */}
+      {/* ── GALERÍA (NUEVO) ── */}
+      <div className="fade-dark-light"/>
+      <section id="galeria" style={{background:'var(--light-bg-2)', padding:'96px 6%'}}>
+        <div className="container">
+          <div style={{textAlign:'center', marginBottom:52}}>
+            <div className="section-tag center">Galería de casos</div>
+            <h2 className="section-title">Resultados reales de<br/><span className="grad">nuestros pacientes</span></h2>
+            <p className="section-body" style={{maxWidth:520, margin:'0 auto'}}>Pasa el cursor sobre cada caso para más detalles. Haz clic para ver el resumen completo.</p>
+          </div>
+          <div className="galeria-grid">
+            {galeria.map(item => (
+              <div key={item.id} className="galeria-card"
+                style={{transform:hoveredGaleria===item.id?'translateY(-5px)':'translateY(0)', boxShadow:hoveredGaleria===item.id?'0 16px 40px rgba(37,99,235,0.15)':'none'}}
+                onMouseEnter={() => setHoveredGaleria(item.id)}
+                onMouseLeave={() => setHoveredGaleria(null)}
+                onClick={() => setGaleriaModal(item)}>
+                <div className="galeria-thumb">
+                  {item.emoji}
+                  <div className="galeria-overlay">
+                    <div style={{fontSize:14, fontWeight:700, color:'#fff', textAlign:'center', padding:'0 16px', lineHeight:1.4}}>{item.titulo}</div>
+                    <div style={{fontSize:11, color:'rgba(255,255,255,0.85)', background:'rgba(255,255,255,0.15)', borderRadius:100, padding:'3px 10px'}}>{item.terapia}</div>
+                    <div style={{fontSize:11, color:'rgba(255,255,255,0.7)', marginTop:4}}>Haz clic para más info →</div>
+                  </div>
+                </div>
+                <div style={{padding:'16px 18px'}}>
+                  <div style={{fontSize:14, fontWeight:700, color:'var(--light-text)', marginBottom:6}}>{item.titulo}</div>
+                  <div style={{fontSize:12, color:'var(--light-muted)', lineHeight:1.65, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>{item.desc}</div>
+                  <div style={{marginTop:10, fontSize:11, color:'var(--blue)', fontWeight:600}}>⏱ {item.duracion}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRECIOS (NUEVO, sección oscura) ── */}
+      <div className="fade-light-dark"/>
+      <section style={{background:'var(--bg-2)', padding:'96px 6%'}}>
+        <div className="container">
+          <div style={{textAlign:'center', marginBottom:52}}>
+            <div className="section-tag center cyan">Precios</div>
+            <h2 className="section-title section-title-dark">Paquetes de<br/><span className="grad">tratamiento</span></h2>
+            <p style={{fontSize:16, color:'var(--muted)', maxWidth:520, margin:'0 auto'}}>Manejamos efectivo, tarjeta y aseguradora. La valoración inicial es gratuita para todos los pacientes nuevos.</p>
+          </div>
+          <div className="precios-grid">
+            {paquetes.map(p => (
+              <div key={p.nombre} className="precio-card" style={{background:p.popular?'rgba(15,110,86,0.15)':'rgba(255,255,255,0.04)', border:p.popular?'2px solid #0F6E56':'1px solid var(--border)', position:'relative'}}>
+                {p.popular && <div style={{position:'absolute', top:-14, left:'50%', transform:'translateX(-50%)', background:'linear-gradient(135deg,#0F6E56,#1D9E75)', color:'#fff', fontSize:11, fontWeight:700, padding:'5px 16px', borderRadius:100, whiteSpace:'nowrap'}}>⭐ Más elegido</div>}
+                <div style={{fontSize:16, fontWeight:700, color:'var(--text)', marginBottom:8}}>{p.nombre}</div>
+                <div style={{fontSize:36, fontWeight:800, color:'#fff', letterSpacing:'-0.02em', lineHeight:1}}>${p.precio.toLocaleString('es-MX')}</div>
+                <div style={{fontSize:13, color:'var(--muted)', marginTop:4, marginBottom:18}}>{p.sesiones} sesiones incluidas</div>
+                <div style={{fontSize:13, color:'var(--muted)', lineHeight:1.7, marginBottom:22}}>{p.desc}</div>
+                <div style={{fontSize:13, color:'var(--cyan)', fontWeight:600, marginBottom:20}}>~ ${Math.round(p.precio/p.sesiones).toLocaleString('es-MX')}/sesión</div>
+                <a href="#contacto" style={{display:'block', textAlign:'center', background:p.popular?'linear-gradient(135deg,#0F6E56,#1D9E75)':'rgba(255,255,255,0.08)', color:'#fff', border:p.popular?'none':'1px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'11px 0', fontSize:14, fontWeight:600, textDecoration:'none'}}>
+                  Solicitar este paquete →
+                </a>
+              </div>
+            ))}
+          </div>
+          <div style={{textAlign:'center', marginTop:28, fontSize:13, color:'var(--muted)'}}>
+            Las sesiones individuales también están disponibles. ·
+            <span style={{color:'var(--cyan)', marginLeft:4}}>Aceptamos IMSS, ISSSTE y Seguro Popular</span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PROCESO (original intacto) ── */}
       <section className="proceso-section" id="proceso">
         <div className="container">
           <div className="proceso-header">
@@ -627,10 +907,10 @@ export default function LandingPage() {
           </div>
           <div className="proceso-grid">
             {[
-              {icon:'📞', titulo:'Agenda tu cita',      desc:'Llámanos o escríbenos para agendar tu primera cita. La valoración inicial está incluida sin costo adicional.',      nota:''},
-              {icon:'🩺', titulo:'Valoración clínica',  desc:'Un terapeuta certificado evalúa tu condición, hace el diagnóstico funcional y diseña tu plan de tratamiento.',       nota:''},
-              {icon:'📦', titulo:'Elige tu paquete',    desc:'Te presentamos las opciones según tu plan. Tú decides con qué paquete iniciar. Manejamos efectivo, tarjeta y aseguradora.', nota:'Solo con paquete activo'},
-              {icon:'🔑', titulo:'Accede al portal',    desc:'Con paquete activo, la clínica crea tu cuenta digital. Recibes invitación por correo para establecer tu contraseña.',   nota:'Cuenta creada por la clínica'},
+              {icon:'📞', titulo:'Agenda tu cita',     desc:'Llámanos o escríbenos para agendar tu primera cita. La valoración inicial está incluida sin costo adicional.', nota:''},
+              {icon:'🩺', titulo:'Valoración clínica', desc:'Un terapeuta certificado evalúa tu condición, hace el diagnóstico funcional y diseña tu plan de tratamiento.', nota:''},
+              {icon:'📦', titulo:'Elige tu paquete',   desc:'Te presentamos las opciones según tu plan. Tú decides con qué paquete iniciar. Manejamos efectivo, tarjeta y aseguradora.', nota:'Solo con paquete activo'},
+              {icon:'🔑', titulo:'Accede al portal',   desc:'Con paquete activo, la clínica crea tu cuenta digital. Recibes invitación por correo para establecer tu contraseña.', nota:'Cuenta creada por la clínica'},
             ].map(p => (
               <div className="paso" key={p.titulo}>
                 <div className="paso-num">{p.icon}</div>
@@ -651,10 +931,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Transición oscuro → claro */}
       <div className="fade-to-light2"/>
 
-      {/* ── CONTACTO ── */}
+      {/* ── CONTACTO (original intacto) ── */}
       <div className="light-section">
         <section id="contacto">
           <div className="container contacto-grid">
@@ -684,7 +963,7 @@ export default function LandingPage() {
         </section>
       </div>
 
-      {/* ── FOOTER ── */}
+      {/* ── FOOTER (original intacto) ── */}
       <footer>
         <div className="footer-brand">
           <div className="footer-logo">RM</div>
@@ -703,11 +982,15 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ── MODALS ── */}
+      {terapeutaModal && <TerapeutaModal t={terapeutaModal} onClose={() => setTerapeutaModal(null)} />}
+      {galeriaModal   && <GaleriaModal item={galeriaModal} onClose={() => setGaleriaModal(null)} />}
     </>
   )
 }
 
-// ── FORMULARIO DE CONTACTO (componente cliente) ──────────────
+// ── FORMULARIO DE CONTACTO (original intacto) ────────────────
 function ContactForm() {
   const [estado, setEstado] = useState<'idle'|'loading'|'ok'|'error'>('idle')
   const [msg, setMsg] = useState('')
@@ -741,8 +1024,8 @@ function ContactForm() {
       <div className="form-nota">
         <strong>Nota:</strong> Este formulario agenda tu primera cita de valoración. El acceso al portal de pacientes se gestiona directamente con tu terapeuta asignado una vez que inicies tu plan.
       </div>
-      {estado==='ok'  && <div className="form-success">✅ {msg}</div>}
-      {estado==='error'&&<div className="form-error">⚠ {msg}</div>}
+      {estado==='ok'   && <div className="form-success">✅ {msg}</div>}
+      {estado==='error'&& <div className="form-error">⚠ {msg}</div>}
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label className="form-label">Nombre completo</label>
