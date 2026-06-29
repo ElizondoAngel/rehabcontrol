@@ -114,6 +114,67 @@ function GaleriaModal({ item, onClose }: { item: typeof galeria[0]; onClose: () 
   )
 }
 
+// ── NAV CON MENÚ HAMBURGUESA ────────────────────────────────
+function NavConMenu() {
+  const [abierto, setAbierto] = useState(false)
+  const links = [
+    {href:'#inicio',        label:'Inicio'},
+    {href:'#nosotros',      label:'Nosotros'},
+    {href:'#equipo',        label:'Equipo'},
+    {href:'#servicios',     label:'Servicios'},
+    {href:'#instalaciones', label:'Instalaciones'},
+    {href:'#galeria',       label:'Galería'},
+    {href:'#proceso',       label:'Cómo funciona'},
+    {href:'#contacto',      label:'Contacto'},
+  ]
+  return (
+    <>
+      <nav className="nav">
+        <a href="#inicio" className="nav-brand">
+          <div className="nav-logo">RM</div>
+          <div>
+            <div className="nav-name">Rehabilitandomed</div>
+            <div className="nav-tag">Clínica de Rehabilitación Física</div>
+          </div>
+        </a>
+        <ul className="nav-links">
+          {links.map(l => <li key={l.href}><a href={l.href}>{l.label}</a></li>)}
+        </ul>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <Link href="/login" className="nav-cta">Portal de pacientes →</Link>
+          <button className="nav-hamburger" onClick={() => setAbierto(true)} aria-label="Abrir menú">
+            <span/><span/><span/>
+          </button>
+        </div>
+      </nav>
+
+      {/* Overlay */}
+      <div className={`nav-overlay${abierto?' open':''}`} onClick={() => setAbierto(false)}/>
+
+      {/* Drawer */}
+      <div className={`nav-drawer${abierto?' open':''}`}>
+        <div className="nav-drawer-header">
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <div className="nav-logo" style={{width:32, height:32, fontSize:11}}>RM</div>
+            <div className="nav-name" style={{fontSize:14}}>Rehabilitandomed</div>
+          </div>
+          <button className="nav-drawer-close" onClick={() => setAbierto(false)}>✕</button>
+        </div>
+        <ul>
+          {links.map(l => (
+            <li key={l.href}>
+              <a href={l.href} onClick={() => setAbierto(false)}>{l.label}</a>
+            </li>
+          ))}
+        </ul>
+        <Link href="/login" className="nav-drawer-cta" onClick={() => setAbierto(false)}>
+          Portal de pacientes →
+        </Link>
+      </div>
+    </>
+  )
+}
+
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
 export default function LandingPage() {
   const [terapeutaModal, setTerapeutaModal] = useState<typeof terapeutas[0] | null>(null)
@@ -184,8 +245,32 @@ export default function LandingPage() {
           display:inline-flex; align-items:center; gap:6px;
           box-shadow:0 4px 18px rgba(37,99,235,0.4);
           transition:transform .2s, box-shadow .2s;
+          white-space:nowrap;
         }
         .nav-cta:hover { transform:translateY(-2px); box-shadow:0 8px 26px rgba(56,189,248,0.45); }
+        .nav-hamburger {
+          display:none; flex-direction:column; justify-content:center; gap:5px;
+          width:36px; height:36px; background:rgba(255,255,255,0.06);
+          border:1px solid var(--border); border-radius:9px;
+          cursor:pointer; padding:8px; flex-shrink:0;
+        }
+        .nav-hamburger span { display:block; height:2px; border-radius:2px; background:#E7EDF7; transition:all .25s; }
+        .nav-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:98; backdrop-filter:blur(2px); }
+        .nav-overlay.open { display:block; }
+        .nav-drawer {
+          position:fixed; top:0; right:0; bottom:0; width:280px; z-index:99;
+          background:#0A1220; border-left:1px solid var(--border);
+          display:flex; flex-direction:column;
+          transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+          padding:24px 20px;
+        }
+        .nav-drawer.open { transform:translateX(0); }
+        .nav-drawer-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:32px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+        .nav-drawer-close { width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,0.06); border:1px solid var(--border); color:var(--muted); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; }
+        .nav-drawer ul { list-style:none; display:flex; flex-direction:column; gap:4px; flex:1; }
+        .nav-drawer ul a { display:block; padding:12px 14px; border-radius:10px; font-size:15px; font-weight:500; color:var(--muted); text-decoration:none; transition:all .18s; }
+        .nav-drawer ul a:hover { background:rgba(255,255,255,0.07); color:#fff; }
+        .nav-drawer-cta { display:block; text-align:center; margin-top:24px; background:linear-gradient(135deg,var(--blue),var(--cyan)); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:600; text-decoration:none; box-shadow:0 6px 20px rgba(37,99,235,0.4); }
 
         /* ── HERO ── */
         .hero {
@@ -603,6 +688,8 @@ export default function LandingPage() {
         /* ── RESPONSIVE ── */
         @media(max-width:900px){
           .nav-links{display:none}
+          .nav-cta{display:none}
+          .nav-hamburger{display:flex}
           .preview-inner,.quienes-grid,.servicios-grid,.contacto-grid{grid-template-columns:1fr}
           .proceso-grid{grid-template-columns:1fr 1fr;gap:32px}
           .proceso-grid::before{display:none}
@@ -626,26 +713,7 @@ export default function LandingPage() {
       `}</style>
 
       {/* ── NAV ── */}
-      <nav className="nav">
-        <a href="#inicio" className="nav-brand">
-          <div className="nav-logo">RM</div>
-          <div>
-            <div className="nav-name">Rehabilitandomed</div>
-            <div className="nav-tag">Clínica de Rehabilitación Física</div>
-          </div>
-        </a>
-        <ul className="nav-links">
-          <li><a href="#inicio">Inicio</a></li>
-          <li><a href="#nosotros">Nosotros</a></li>
-          <li><a href="#equipo">Equipo</a></li>
-          <li><a href="#servicios">Servicios</a></li>
-          <li><a href="#instalaciones">Instalaciones</a></li>
-          <li><a href="#galeria">Galería</a></li>
-          <li><a href="#proceso">Cómo funciona</a></li>
-          <li><a href="#contacto">Contacto</a></li>
-        </ul>
-        <Link href="/login" className="nav-cta">Portal de pacientes →</Link>
-      </nav>
+      <NavConMenu />
 
       {/* ── HERO (original intacto) ── */}
       <section className="hero" id="inicio">
