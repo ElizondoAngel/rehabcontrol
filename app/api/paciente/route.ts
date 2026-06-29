@@ -44,6 +44,7 @@ async function verificarRol(supabase: Awaited<ReturnType<typeof createClient>>) 
 
 // ── POST — Crear paciente ─────────────────────────────────────
 export async function POST(request: Request) {
+  
   try {
     const supabase = await createClient()
     const auth = await verificarRol(supabase)
