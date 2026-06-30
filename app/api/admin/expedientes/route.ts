@@ -63,7 +63,7 @@ export async function GET(request: Request) {
         expedientes(*),
         citas(
           id_cita, fecha_hora, estado, notas, duracion_min,
-          progreso_sesiones(nivel_dolor, movilidad, observaciones, ejercicios_completados)
+          progreso_sesiones(nivel_dolor, movilidad, observaciones, ejercicios)
         ),
         pagos(id_pago, monto, estado_pago, metodo_pago, fecha_pago, motivo_reembolso)
       `)
