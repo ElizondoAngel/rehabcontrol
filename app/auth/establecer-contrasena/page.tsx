@@ -6,42 +6,68 @@
  * F9 — Pantalla donde un usuario invitado (paciente) define su
  * contraseña por primera vez, tras aceptar la invitación por correo.
  *
- * FLUJO:
- *   1. Supabase redirige aquí con un fragmento #access_token=...&type=invite
- *      (Supabase JS lo detecta y crea la sesión automáticamente al cargar)
- *   2. Mostramos un formulario simple: contraseña + confirmar contraseña
- *   3. Al enviar, supabase.auth.updateUser({ password }) establece la clave
- *   4. Redirigimos a /paciente/dashboard
+ * FLUJO (v2 — corrige el bug de "otp_expired" por escaneo de Gmail):
+ *   1. El correo de invitación YA NO apunta directo al endpoint de
+ *      verificación de Supabase (eso consumía el token cuando Gmail/
+ *      Outlook escaneaban el link automáticamente, antes de que el
+ *      usuario diera click).
+ *   2. Ahora el correo apunta aquí con ?token_hash=...&type=invite
+ *      como query params (NO fragmento). Cargar esta página NO
+ *      consume nada — es inerte hasta que el usuario interactúa.
+ *   3. Mostramos un botón "Aceptar invitación". Solo AL HACER CLICK
+ *      llamamos a supabase.auth.verifyOtp({ token_hash, type }),
+ *      que es lo que realmente intercambia el token por una sesión.
+ *   4. Una vez con sesión activa, mostramos el formulario de
+ *      contraseña → supabase.auth.updateUser({ password })
+ *   5. Redirigimos a /paciente/dashboard
  *
- * SEGURIDAD:
- *   • Si no hay sesión activa (token inválido/expirado), mostramos error
- *     y no se permite definir contraseña
- *   • Validación de longitud mínima y coincidencia de ambos campos
+ * REQUIERE cambiar la plantilla de correo "Invite user" en
+ * Supabase Dashboard → Authentication → Email Templates, para que
+ * el botón use:
+ *   {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite
+ * en vez de {{ .ConfirmationURL }}
  */
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function EstablecerContrasenaPage() {
+type Estado = 'esperando_click' | 'verificando' | 'sesion_valida' | 'error' | 'sin_token'
+
+function EstablecerContrasenaContent() {
   const router = useRouter()
-  const [verificando, setVerificando] = useState(true)
-  const [sesionValida, setSesionValida] = useState(false)
+  const searchParams = useSearchParams()
+  const tokenHash = searchParams.get('token_hash')
+  const type = searchParams.get('type')
+
+  const [estado, setEstado] = useState<Estado>(
+    tokenHash && type ? 'esperando_click' : 'sin_token'
+  )
   const [password, setPassword] = useState('')
   const [confirmar, setConfirmar] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
+  // Paso clave: esto SOLO se ejecuta cuando el humano da click —
+  // nunca al cargar la página, así un escaneo automático de correo
+  // (Gmail/Outlook) no consume el token de invitación.
+  async function handleAceptarInvitacion() {
+    if (!tokenHash || !type) return
+    setEstado('verificando')
+    setError('')
+
     const supabase = createClient()
-    // Supabase JS detecta el #access_token de la URL automáticamente
-    // (detectSessionInUrl: true, configuración por defecto) y crea la sesión.
-    // Solo necesitamos confirmar que efectivamente quedó una sesión activa.
-    supabase.auth.getSession().then(({ data }) => {
-      setSesionValida(!!data.session)
-      setVerificando(false)
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: type as 'invite',
     })
-  }, [])
+
+    if (verifyError) {
+      setEstado('error')
+      return
+    }
+    setEstado('sesion_valida')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -104,16 +130,41 @@ export default function EstablecerContrasenaPage() {
       <div className="card">
         <div className="icon">🔑</div>
 
-        {verificando ? (
+        {estado === 'sin_token' && (
+          <>
+            <div className="title">Enlace inválido</div>
+            <p className="sub">
+              Este enlace no contiene una invitación válida. Solicita a tu clínica que te envíe una nueva.
+            </p>
+          </>
+        )}
+
+        {estado === 'esperando_click' && (
+          <>
+            <div className="title">Has sido invitado</div>
+            <p className="sub">
+              Da click en el botón para aceptar tu invitación a RehabControl y definir tu contraseña.
+            </p>
+            <button className="btn-submit" onClick={handleAceptarInvitacion}>
+              Aceptar invitación →
+            </button>
+          </>
+        )}
+
+        {estado === 'verificando' && (
           <div className="center-msg">Verificando invitación…</div>
-        ) : !sesionValida ? (
+        )}
+
+        {estado === 'error' && (
           <>
             <div className="title">Enlace inválido o expirado</div>
             <p className="sub">
               Este enlace de invitación ya no es válido. Solicita a tu clínica que te envíe una nueva invitación.
             </p>
           </>
-        ) : (
+        )}
+
+        {estado === 'sesion_valida' && (
           <>
             <div className="title">Crea tu contraseña</div>
             <p className="sub">Define una contraseña para acceder a tu portal de paciente en RehabControl.</p>
@@ -145,5 +196,13 @@ export default function EstablecerContrasenaPage() {
         )}
       </div>
     </>
+  )
+}
+
+export default function EstablecerContrasenaPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8C9BB5' }}>Cargando…</div>}>
+      <EstablecerContrasenaContent />
+    </Suspense>
   )
 }
