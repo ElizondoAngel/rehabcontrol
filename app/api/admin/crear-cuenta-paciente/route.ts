@@ -47,6 +47,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import nodemailer from 'nodemailer'
 
 const BodySchema = z.object({
   email: z.string().email(),
@@ -55,10 +56,17 @@ const BodySchema = z.object({
   paciente_id: z.number().int().positive().optional(), // vincular de inmediato (opcional)
 })
 
-// Mientras no tengas dominio verificado en Resend, deja el remitente de
-// pruebas. Cuando verifiques un dominio, cámbialo por ej. a
-// 'RehabControl <notificaciones@tudominio.com>'
-const EMAIL_FROM = 'RehabControl <onboarding@resend.dev>'
+// Envío vía Gmail SMTP (sin restricción de destinatario, a diferencia del
+// sandbox de Resend). Requiere GMAIL_USER + GMAIL_APP_PASSWORD (contraseña
+// de aplicación generada en myaccount.google.com/apppasswords — NUNCA la
+// contraseña normal de la cuenta).
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+})
 
 export async function POST(request: Request) {
   try {
@@ -133,15 +141,10 @@ export async function POST(request: Request) {
     // página no consume nada, solo el click explícito en "Aceptar invitación"
     const linkInvitacion = `${redirectTo}?token_hash=${tokenHash}&type=invite`
 
-    // 5. Mandar el correo nosotros mismos vía Resend
-    const emailResp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: EMAIL_FROM,
+    // 5. Mandar el correo nosotros mismos vía Gmail SMTP
+    try {
+      await transporter.sendMail({
+        from: `"RehabControl" <${process.env.GMAIL_USER}>`,
         to: email,
         subject: 'Invitación a tu portal de paciente — RehabControl',
         html: `
@@ -162,14 +165,11 @@ export async function POST(request: Request) {
             </p>
           </div>
         `,
-      }),
-    })
-
-    if (!emailResp.ok) {
-      const errBody = await emailResp.text()
-      console.error('Resend error:', errBody)
+      })
+    } catch (mailErr) {
+      console.error('Gmail SMTP error:', mailErr)
       // El usuario ya se creó en Auth aunque el correo falle — lo informamos
-      // para que el admin pueda reenviar manualmente o revisar Resend.
+      // para que el admin pueda reenviar manualmente o revisar las credenciales SMTP.
       return NextResponse.json(
         { error: 'Cuenta creada, pero falló el envío del correo de invitación' },
         { status: 502 }
