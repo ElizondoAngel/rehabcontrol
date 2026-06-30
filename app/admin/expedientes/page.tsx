@@ -11,20 +11,23 @@ export default async function ExpedientesPage() {
     .from('profiles').select('rol').eq('id', user.id).single()
   if (!['admin', 'secretaria'].includes(profile?.rol ?? '')) redirect('/unauthorized')
 
-  // Pacientes con su expediente (si tienen) y métricas básicas
+  // Pacientes con su expediente (si tienen) y métricas básicas.
+  // NOTA: 'pacientes' tiene DOS llaves foráneas hacia 'profiles'
+  // (profile_id y terapeuta_id), así que hay que indicar explícitamente
+  // cuál usar con la sintaxis profiles!nombre_constraint(...) — si no,
+  // Supabase no puede resolver la ambigüedad y la query entera falla.
   const { data: pacientes, error: errorPacientes } = await supabase
     .from('pacientes')
     .select(`
       id_paciente, nombre_completo, fecha_nacimiento, telefono, activo, created_at,
-      profiles(nombre_completo),
+      profiles!pacientes_profile_id_fkey(nombre_completo),
       expedientes(id_expediente, diagnostico, estado, fecha_apertura),
       citas(id_cita, estado),
       pagos(id_pago, estado_pago, monto)
     `)
     .order('nombre_completo', { ascending: true })
 
-  // DEBUG TEMPORAL — quitar una vez identificada la causa.
-  // Esto aparece en Vercel → Logs (Runtime Logs), no en la consola del navegador.
+  // DEBUG TEMPORAL — quitar una vez confirmado que ya funciona.
   if (errorPacientes) {
     console.error('Error al cargar pacientes en /admin/expedientes:', JSON.stringify(errorPacientes, null, 2))
   }
