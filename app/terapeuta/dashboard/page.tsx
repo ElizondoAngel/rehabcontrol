@@ -6,73 +6,213 @@ export default async function TerapeutaDashboard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('nombre_completo').eq('id', user.id).single()
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('rol, nombre_completo')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.rol !== 'terapeuta' && profile?.rol !== 'admin') {
+    redirect('/unauthorized')
+  }
+
+  // ── 1. PACIENTES asignados a este terapeuta ──────────────────
+  const { data: pacientesData, error: errorPacientes } = await supabase
+    .from('pacientes')
+    .select('id_paciente, nombre_completo, activo')
+    .eq('terapeuta_id', user.id)
+    .order('nombre_completo', { ascending: true })
+
+  if (errorPacientes) console.error('Error cargando pacientes:', errorPacientes.message)
+  const pacientes = pacientesData ?? []
+  const idsPacientes = pacientes.map(p => p.id_paciente)
+  const pacientesActivos = pacientes.filter(p => p.activo)
+
+  // ── 2. CITAS de este terapeuta (todas, para derivar varias métricas) ──
+  const { data: citasData, error: errorCitas } = await supabase
+    .from('citas')
+    .select('id_cita, paciente_id, fecha_hora, estado')
+    .eq('terapeuta_id', user.id)
+
+  if (errorCitas) console.error('Error cargando citas:', errorCitas.message)
+  const citas = citasData ?? []
+
+  const hoyStr = new Date().toISOString().split('T')[0]
+  const citasHoy = citas.filter(c => c.fecha_hora.startsWith(hoyStr))
+  const citasHoyPendientes = citasHoy.filter(c => c.estado === 'programada').length
+  const proximaCitaHoy = citasHoy
+    .filter(c => c.estado === 'programada')
+    .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora))[0]
+
+  const ahora = new Date()
+  const proximaCitaPorPaciente = new Map<number, { fecha_hora: string }>()
+  for (const c of citas) {
+    if (c.estado !== 'programada') continue
+    if (new Date(c.fecha_hora) < ahora) continue
+    const actual = proximaCitaPorPaciente.get(c.paciente_id)
+    if (!actual || new Date(c.fecha_hora) < new Date(actual.fecha_hora)) {
+      proximaCitaPorPaciente.set(c.paciente_id, { fecha_hora: c.fecha_hora })
+    }
+  }
+
+  const completadasPorPaciente = new Map<number, number>()
+  for (const c of citas) {
+    if (c.estado !== 'completada') continue
+    completadasPorPaciente.set(c.paciente_id, (completadasPorPaciente.get(c.paciente_id) ?? 0) + 1)
+  }
+
+  // ── 3. EXPEDIENTES ──
+  const { data: expedientesData, error: errorExpedientes } = idsPacientes.length > 0
+    ? await supabase.from('expedientes').select('paciente_id, diagnostico').in('paciente_id', idsPacientes)
+    : { data: [], error: null }
+
+  if (errorExpedientes) console.error('Error cargando expedientes:', errorExpedientes.message)
+  const diagnosticoPorPaciente = new Map<number, string>()
+  for (const e of expedientesData ?? []) {
+    diagnosticoPorPaciente.set(e.paciente_id, e.diagnostico)
+  }
+
+  // ── 4. PROGRESO_SESIONES ──
+  const { data: sesionesData, error: errorSesiones } = idsPacientes.length > 0
+    ? await supabase.from('progreso_sesiones').select('paciente_id, nivel_dolor, movilidad').in('paciente_id', idsPacientes)
+    : { data: [], error: null }
+
+  if (errorSesiones) console.error('Error cargando progreso_sesiones:', errorSesiones.message)
+  const sesiones = sesionesData ?? []
+
+  const sesionesRegistradasPorPaciente = new Map<number, number>()
+  const movilidadPorPaciente = new Map<number, number[]>()
+  for (const s of sesiones) {
+    sesionesRegistradasPorPaciente.set(s.paciente_id, (sesionesRegistradasPorPaciente.get(s.paciente_id) ?? 0) + 1)
+    const arr = movilidadPorPaciente.get(s.paciente_id) ?? []
+    arr.push(s.movilidad ?? 0)
+    movilidadPorPaciente.set(s.paciente_id, arr)
+  }
+
+  const promedioProgreso = sesiones.length > 0
+    ? Math.round(sesiones.reduce((acc, s) => acc + (s.movilidad ?? 0), 0) / sesiones.length * 10)
+    : 0
+
+  // ── 5. Lista final de pacientes ──
+  const pacientesConDatos = pacientesActivos.map(p => {
+    const sesionesReg = sesionesRegistradasPorPaciente.get(p.id_paciente) ?? 0
+    const totalCompletadas = completadasPorPaciente.get(p.id_paciente) ?? 0
+    const proxima = proximaCitaPorPaciente.get(p.id_paciente)
+    const ini = p.nombre_completo.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()
+    const movArr = movilidadPorPaciente.get(p.id_paciente) ?? []
+    const movProm = movArr.length > 0 ? Math.round(movArr.reduce((a,b)=>a+b,0) / movArr.length * 10) : null
+
+    return {
+      id_paciente: p.id_paciente,
+      ini,
+      nombre: p.nombre_completo,
+      diagnostico: diagnosticoPorPaciente.get(p.id_paciente) ?? null,
+      sesionesReg,
+      totalCompletadas,
+      movProm,
+      proximaCita: proxima
+        ? new Date(proxima.fecha_hora).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }) +
+          ' · ' + new Date(proxima.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+        : null,
+    }
+  })
+
+  const primerNombre = profile?.nombre_completo?.split(' ')[0] ?? 'Terapeuta'
+  const horaActual = new Date().getHours()
+  const saludo = horaActual < 12 ? 'Buenos días' : horaActual < 19 ? 'Buenas tardes' : 'Buenas noches'
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
         :root{
-          --bg:#0D1A12;--sidebar:#111D16;--card:#162419;--border:rgba(255,255,255,0.07);
-          --mid:#1A9068;--light:#4FC49A;--pale:#DCF2E9;--text:#E8F5EE;--muted:rgba(232,245,238,0.45);
+          --bg:#060B14;--sidebar:#0A1220;--card:#0F1B2E;--card-soft:rgba(255,255,255,0.025);--border:rgba(255,255,255,0.08);
+          --mid:#2563EB;--light:#38BDF8;--pale:#DCEEFA;--text:#E7EDF7;--muted:rgba(140,155,181,0.85);
+          --green:#34D399;--amber:#F5B400;--red:#F25555;
         }
         body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
-        .sidebar{width:260px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-        .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+        .sidebar{width:248px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+        .sb-brand{padding:22px 20px 16px;border-bottom:1px solid var(--border)}
         .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:36px;height:36px;border-radius:9px;background:var(--mid);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff}
-        .sb-name{font-size:14px;font-weight:600;color:var(--text)}
+        .sb-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mid),var(--light));display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:#fff}
+        .sb-name{font-size:13.5px;font-weight:600;color:var(--text)}
         .sb-ver{font-size:10px;color:var(--muted)}
-        .sb-role{margin:12px 12px 4px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:32px;height:32px;border-radius:8px;background:rgba(55,138,221,0.15);border:1px solid rgba(55,138,221,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-        .sb-role-name{font-size:13px;font-weight:500;color:var(--text)}
-        .sb-role-sub{font-size:11px;color:#378ADD}
-        .sb-nav{flex:1;padding:8px 10px}
-        .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--muted);text-decoration:none;transition:all .18s;margin-bottom:2px}
-        .sb-nav a:hover{background:rgba(255,255,255,0.05);color:var(--text)}
-        .sb-nav a.active{background:rgba(26,144,104,0.15);color:var(--light)}
-        .sb-nav-icon{font-size:16px;width:20px;text-align:center}
-        .sb-bottom{padding:12px 10px;border-top:1px solid var(--border)}
-        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;color:var(--muted);text-decoration:none;transition:all .18s}
-        .sb-bottom a:hover{color:#E04444}
+        .sb-role{margin:14px 14px 6px;padding:11px 13px;display:flex;align-items:center;gap:10px}
+        .sb-role-icon{width:28px;height:28px;border-radius:7px;background:rgba(56,189,248,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+        .sb-role-name{font-size:12.5px;font-weight:600;color:var(--text)}
+        .sb-role-sub{font-size:10.5px;color:var(--light)}
+        .sb-nav{flex:1;padding:6px 12px;margin-top:6px}
+        .sb-nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;color:var(--muted);text-decoration:none;transition:all .15s;margin-bottom:1px;font-weight:500}
+        .sb-nav a:hover{background:rgba(255,255,255,0.04);color:var(--text)}
+        .sb-nav a.active{background:rgba(37,99,235,0.14);color:var(--light)}
+        .sb-nav-icon{font-size:15px;width:18px;text-align:center}
+        .sb-bottom{padding:12px 12px;border-top:1px solid var(--border)}
+        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;color:var(--muted);text-decoration:none;transition:all .15s}
+        .sb-bottom a:hover{color:var(--red)}
+
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-        .topbar{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0}
-        .topbar-title{font-size:14px;color:var(--muted)}
+        .topbar{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 32px;flex-shrink:0}
         .topbar-right{display:flex;align-items:center;gap:16px}
-        .online-dot{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--light)}
-        .dot{width:7px;height:7px;border-radius:50%;background:var(--light)}
-        .notif{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
-        .content{flex:1;overflow-y:auto;padding:28px}
-        .page-title{font-size:26px;font-weight:600;color:var(--text);margin-bottom:4px}
-        .page-sub{font-size:14px;color:var(--muted);margin-bottom:28px}
-        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-        .metric{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 22px;position:relative;overflow:hidden}
-        .metric-label{font-size:12px;color:var(--muted);margin-bottom:12px}
-        .metric-num{font-size:32px;font-weight:600;color:var(--text);line-height:1}
-        .metric-sub{font-size:12px;color:var(--muted);margin-top:6px}
-        .metric-icon{position:absolute;top:18px;right:18px;width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px}
-        .icon-green{background:rgba(26,144,104,0.15)}
-        .icon-blue{background:rgba(55,138,221,0.15)}
-        .icon-amber{background:rgba(245,180,0,0.15)}
-        .icon-teal{background:rgba(79,196,154,0.15)}
-        .table-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px}
-        .table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-        .table-title{font-size:15px;font-weight:500;color:var(--text)}
-        .patient-row{display:flex;align-items:center;padding:13px 0;border-bottom:1px solid var(--border)}
-        .patient-row:last-child{border-bottom:none}
-        .p-avatar{width:38px;height:38px;border-radius:50%;background:rgba(26,144,104,0.25);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text);flex-shrink:0;margin-right:12px}
-        .p-name{font-size:13px;font-weight:500;color:var(--text)}
-        .p-diag{font-size:11px;color:var(--muted)}
-        .p-progress{flex:1;margin:0 20px}
-        .p-progress-label{font-size:11px;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between}
-        .progress-bar{height:5px;background:rgba(255,255,255,0.08);border-radius:100px;overflow:hidden}
-        .progress-fill{height:100%;background:linear-gradient(90deg,var(--mid),var(--light));border-radius:100px}
-        .p-cita{text-align:right;white-space:nowrap}
-        .p-cita-label{font-size:11px;color:var(--muted)}
-        .p-cita-val{font-size:12px;color:var(--light);font-weight:500}
-        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:var(--mid);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(26,144,104,0.4);transition:transform .2s;z-index:50;text-decoration:none}
+        .online-dot{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--light)}
+        .dot{width:6px;height:6px;border-radius:50%;background:var(--light)}
+        .notif{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px}
+        .content{flex:1;overflow-y:auto;padding:36px 40px}
+
+        /* HERO */
+        .hero{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:36px;flex-wrap:wrap}
+        .hero-greeting{font-size:13.5px;color:var(--light);font-weight:600;letter-spacing:.02em;margin-bottom:8px;text-transform:uppercase}
+        .hero-title{font-size:34px;font-weight:700;color:var(--text);letter-spacing:-0.02em;line-height:1.15}
+        .hero-sub{font-size:14.5px;color:var(--muted);margin-top:8px;max-width:480px;line-height:1.5}
+        .hero-next{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 22px;min-width:240px;flex-shrink:0}
+        .hero-next-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+        .hero-next-time{font-size:24px;font-weight:700;color:var(--light);letter-spacing:-0.01em}
+        .hero-next-empty{font-size:14px;color:var(--muted);font-style:italic}
+        .hero-next-count{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+        /* MÉTRICAS — franja delgada en línea, no tarjetas cuadradas */
+        .metrics-strip{display:flex;gap:0;margin-bottom:36px;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+        .metric-cell{flex:1;padding:18px 24px;position:relative}
+        .metric-cell:not(:last-child){border-right:1px solid var(--border)}
+        .metric-num{font-size:28px;font-weight:700;color:var(--text);letter-spacing:-0.01em;line-height:1}
+        .metric-label{font-size:12.5px;color:var(--muted);margin-top:6px;display:flex;align-items:center;gap:6px}
+        .metric-accent{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:0}
+        .accent-blue{background:var(--mid)}
+        .accent-cyan{background:var(--light)}
+        .accent-green{background:var(--green)}
+
+        /* SECCIÓN PACIENTES */
+        .section-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+        .section-title{font-size:18px;font-weight:600;color:var(--text)}
+        .section-link{font-size:13px;color:var(--light);text-decoration:none;font-weight:500}
+        .section-link:hover{text-decoration:underline}
+
+        .patient-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+        .patient-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;text-decoration:none;color:inherit;transition:border-color .18s,transform .18s;display:flex;flex-direction:column;gap:14px}
+        .patient-card:hover{border-color:rgba(56,189,248,0.35);transform:translateY(-2px)}
+        .patient-card-top{display:flex;align-items:center;gap:12px}
+        .p-avatar{width:42px;height:42px;border-radius:50%;background:rgba(37,99,235,0.22);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--light);flex-shrink:0}
+        .p-name{font-size:14.5px;font-weight:600;color:var(--text)}
+        .p-diag{font-size:12px;color:var(--muted);margin-top:2px}
+        .patient-card-stats{display:flex;gap:18px;padding-top:14px;border-top:1px solid var(--border)}
+        .pcs-item{flex:1}
+        .pcs-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+        .pcs-val{font-size:13.5px;font-weight:600;color:var(--text)}
+        .pcs-val.muted{color:var(--muted);font-weight:500;font-style:italic;font-size:12.5px}
+        .mov-bar{height:4px;background:rgba(255,255,255,0.07);border-radius:100px;overflow:hidden;margin-top:6px}
+        .mov-fill{height:100%;background:linear-gradient(90deg,var(--mid),var(--light));border-radius:100px}
+
+        .empty-state{background:var(--card);border:1px dashed var(--border);border-radius:16px;padding:48px 24px;text-align:center;color:var(--muted);font-size:14px}
+
+        .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--mid),var(--light));display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(37,99,235,0.35);transition:transform .2s;z-index:50;text-decoration:none}
         .chatbot-bubble:hover{transform:scale(1.08)}
+
+        @media (max-width:900px){
+          .patient-grid{grid-template-columns:1fr}
+          .metrics-strip{flex-direction:column}
+          .metric-cell:not(:last-child){border-right:none;border-bottom:1px solid var(--border)}
+        }
       `}</style>
 
       <div className="sidebar">
@@ -84,86 +224,121 @@ export default async function TerapeutaDashboard() {
         </div>
         <div className="sb-role">
           <div className="sb-role-icon">📈</div>
-          <div><div className="sb-role-name">Terapeuta</div><div className="sb-role-sub">Acceso Limitado</div></div>
+          <div><div className="sb-role-name">Terapeuta</div><div className="sb-role-sub">Acceso limitado</div></div>
         </div>
         <nav className="sb-nav">
-          {[
-            {icon:'🏠', label:'Mi Panel',        active:true},
-            {icon:'👥', label:'Mis Pacientes',   active:false},
-            {icon:'📋', label:'Expedientes',      active:false},
-            {icon:'📅', label:'Mi Agenda',        active:false},
-            {icon:'📊', label:'Progreso',         active:false},
-          ].map(n => (
-            <a key={n.label} href="#" className={n.active?'active':''}>
-              <span className="sb-nav-icon">{n.icon}</span>{n.label}
-            </a>
-          ))}
+          <Link href="/terapeuta/dashboard" className="active">
+            <span className="sb-nav-icon">🏠</span>Mi Panel
+          </Link>
+          <Link href="/terapeuta/pacientes">
+            <span className="sb-nav-icon">👥</span>Mis Pacientes
+          </Link>
+          <Link href="/terapeuta/expedientes">
+            <span className="sb-nav-icon">📋</span>Expedientes
+          </Link>
+          <Link href="/terapeuta/agenda">
+            <span className="sb-nav-icon">📅</span>Mi Agenda
+          </Link>
+          <Link href="/terapeuta/progreso">
+            <span className="sb-nav-icon">📊</span>Progreso
+          </Link>
         </nav>
         <div className="sb-bottom">
-          <Link href="/login"><span className="sb-nav-icon">→</span> Cerrar Sesión</Link>
+          <Link href="/login"><span className="sb-nav-icon">→</span> Cerrar sesión</Link>
         </div>
       </div>
 
       <div className="main">
         <div className="topbar">
-          <span className="topbar-title">Mi Panel</span>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/> En línea</div>
             <div className="notif">🔔</div>
           </div>
         </div>
+
         <div className="content">
-          <div className="page-title">Panel del Terapeuta</div>
-          <div className="page-sub">Solo ves los pacientes asignados a ti — Nivel 2</div>
-
-          <div className="metrics">
-            {[
-              {label:'Mis pacientes',     num:'4',   sub:'activos hoy',         icon:'👥', cls:'icon-green'},
-              {label:'Sesiones hoy',      num:'3',   sub:'1 pendiente',          icon:'📅', cls:'icon-blue'},
-              {label:'Notas pendientes',  num:'2',   sub:'de ayer',              icon:'📋', cls:'icon-amber'},
-              {label:'Promedio progreso', num:'62%', sub:'de mis pacientes',     icon:'📈', cls:'icon-teal'},
-            ].map(m => (
-              <div className="metric" key={m.label}>
-                <div className="metric-label">{m.label}</div>
-                <div className="metric-num">{m.num}</div>
-                <div className="metric-sub">{m.sub}</div>
-                <div className={`metric-icon ${m.cls}`}>{m.icon}</div>
+          {/* HERO */}
+          <div className="hero">
+            <div>
+              <div className="hero-greeting">{saludo}</div>
+              <div className="hero-title">Hola, {primerNombre}</div>
+              <div className="hero-sub">
+                Tienes {pacientesActivos.length} paciente{pacientesActivos.length !== 1 ? 's' : ''} activo{pacientesActivos.length !== 1 ? 's' : ''} bajo tu cuidado.
+                {citasHoyPendientes > 0 ? ` Te quedan ${citasHoyPendientes} sesión${citasHoyPendientes !== 1 ? 'es' : ''} por atender hoy.` : ' No tienes sesiones pendientes por hoy.'}
               </div>
-            ))}
-          </div>
-
-          <div className="table-card">
-            <div className="table-header">
-              <span className="table-title">Mis pacientes asignados</span>
             </div>
-            {[
-              {ini:'RF', name:'Roberto Fuentes',  diag:'Lesión de rodilla',           sesiones:8,  total:20, cita:'Hoy 14:00'},
-              {ini:'CV', name:'Claudia Vázquez',  diag:'Rehabilitación lumbar',        sesiones:5,  total:15, cita:'Mañana 09:00'},
-              {ini:'ME', name:'Mario Espinoza',   diag:'Post-operatorio hombro',       sesiones:12, total:24, cita:'Jue 11:00'},
-              {ini:'LH', name:'Lucía Herrera',    diag:'Fisioterapia neurológica',     sesiones:3,  total:30, cita:'Vie 16:30'},
-            ].map(p => (
-              <div className="patient-row" key={p.ini}>
-                <div className="p-avatar">{p.ini}</div>
-                <div style={{minWidth:'160px'}}>
-                  <div className="p-name">{p.name}</div>
-                  <div className="p-diag">{p.diag}</div>
-                </div>
-                <div className="p-progress">
-                  <div className="p-progress-label">
-                    <span>Progreso</span>
-                    <span>{p.sesiones}/{p.total} sesiones</span>
+            <div className="hero-next">
+              <div className="hero-next-label">📅 Próxima sesión de hoy</div>
+              {proximaCitaHoy ? (
+                <>
+                  <div className="hero-next-time">
+                    {new Date(proximaCitaHoy.fecha_hora).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:false })}
                   </div>
-                  <div className="progress-bar">
-                    <div className="progress-fill" style={{width:`${Math.round(p.sesiones/p.total*100)}%`}}/>
-                  </div>
-                </div>
-                <div className="p-cita">
-                  <div className="p-cita-label">Próxima cita</div>
-                  <div className="p-cita-val">{p.cita}</div>
-                </div>
-              </div>
-            ))}
+                  <div className="hero-next-count">{citasHoyPendientes} pendiente{citasHoyPendientes !== 1 ? 's' : ''} en total hoy</div>
+                </>
+              ) : (
+                <div className="hero-next-empty">Sin sesiones programadas</div>
+              )}
+            </div>
           </div>
+
+          {/* MÉTRICAS — franja horizontal compacta */}
+          <div className="metrics-strip">
+            <div className="metric-cell">
+              <div className="metric-accent accent-blue" />
+              <div className="metric-num">{pacientesActivos.length}</div>
+              <div className="metric-label">👥 Pacientes activos</div>
+            </div>
+            <div className="metric-cell">
+              <div className="metric-accent accent-cyan" />
+              <div className="metric-num">{citasHoy.length}</div>
+              <div className="metric-label">📅 Sesiones programadas hoy</div>
+            </div>
+            <div className="metric-cell">
+              <div className="metric-accent accent-green" />
+              <div className="metric-num">{promedioProgreso}%</div>
+              <div className="metric-label">📈 Movilidad promedio registrada</div>
+            </div>
+          </div>
+
+          {/* PACIENTES — tarjetas en grid, no filas de tabla */}
+          <div className="section-header">
+            <div className="section-title">Mis pacientes</div>
+            <Link href="/terapeuta/pacientes" className="section-link">Ver todos →</Link>
+          </div>
+
+          {pacientesConDatos.length === 0 ? (
+            <div className="empty-state">Aún no tienes pacientes activos asignados.</div>
+          ) : (
+            <div className="patient-grid">
+              {pacientesConDatos.map(p => (
+                <Link href={`/terapeuta/expedientes/${p.id_paciente}`} className="patient-card" key={p.id_paciente}>
+                  <div className="patient-card-top">
+                    <div className="p-avatar">{p.ini}</div>
+                    <div>
+                      <div className="p-name">{p.nombre}</div>
+                      <div className="p-diag">{p.diagnostico ?? 'Sin expediente clínico'}</div>
+                    </div>
+                  </div>
+                  <div className="patient-card-stats">
+                    <div className="pcs-item">
+                      <div className="pcs-label">Sesiones</div>
+                      <div className="pcs-val">{p.sesionesReg}/{p.totalCompletadas}</div>
+                      <div className="mov-bar">
+                        <div className="mov-fill" style={{width: `${p.totalCompletadas > 0 ? Math.min(100, Math.round(p.sesionesReg/p.totalCompletadas*100)) : 0}%`}} />
+                      </div>
+                    </div>
+                    <div className="pcs-item">
+                      <div className="pcs-label">Próxima cita</div>
+                      {p.proximaCita
+                        ? <div className="pcs-val">{p.proximaCita}</div>
+                        : <div className="pcs-val muted">Sin programar</div>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
