@@ -99,7 +99,7 @@ export default async function TerapeutaDashboard() {
     const sesionesReg = sesionesRegistradasPorPaciente.get(p.id_paciente) ?? 0
     const totalCompletadas = completadasPorPaciente.get(p.id_paciente) ?? 0
     const proxima = proximaCitaPorPaciente.get(p.id_paciente)
-    const ini = p.nombre_completo.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()
+    const ini = p.nombre_completo.split(' ').map((w: string) => w[0]).slice(0,2).join('').toUpperCase()
     const movArr = movilidadPorPaciente.get(p.id_paciente) ?? []
     const movProm = movArr.length > 0 ? Math.round(movArr.reduce((a,b)=>a+b,0) / movArr.length * 10) : null
 
