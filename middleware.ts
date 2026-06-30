@@ -28,11 +28,15 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // ── Rutas siempre públicas — salir ANTES de verificar sesión ──
-  // Esto evita que visitantes nuevos queden atrapados en el login
+  // Esto evita que visitantes nuevos queden atrapados en el login.
+  // /auth/establecer-contrasena se carga SIN sesión todavía — la sesión
+  // solo se crea cuando el usuario invitado da click en "Aceptar invitación"
+  // (verifyOtp), así que esta ruta debe ser pública para que llegue ahí.
   if (
     pathname === '/' ||
     pathname === '/login' ||
     pathname === '/unauthorized' ||
+    pathname === '/auth/establecer-contrasena' ||
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
