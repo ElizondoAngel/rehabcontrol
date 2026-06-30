@@ -1,164 +1,616 @@
 /**
- * /api/chatbot/route.ts
- * POST — chatbot de RehabControl con contexto dinámico por rol
- *
- * Cada rol recibe un system prompt diferente:
- *   - admin:      acceso a métricas globales, puede preguntar sobre cualquier módulo
- *   - secretaria: agenda, citas del día, pagos pendientes
- *   - terapeuta:  sus pacientes, progreso de sesiones, expedientes
- *   - paciente:   sus propias citas, pagos y progreso
+ * app/api/chatbot/route.ts
+ * RehabControl AI v5 — Gemini 2.5 Flash + Google Search + Function Calling + Historial
  */
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
+interface GeminiPart {
+  text?: string
+  inline_data?: { mime_type: string; data: string }
+  functionCall?: { name: string; args: Record<string, any> }
+  functionResponse?: { name: string; response: any }
+}
+interface GeminiMsg { role: 'user' | 'model' | 'function'; parts: GeminiPart[] }
+
+// ────────────────────────────────────────────────────────────────
+// Funciones que el chatbot puede ejecutar de verdad (function calling)
+// ────────────────────────────────────────────────────────────────
+const FUNCTION_DECLARATIONS = [
+  {
+    name: 'buscar_paciente',
+    description:
+      'Busca un paciente por nombre o parte del nombre. Úsala cuando el terapeuta o secretaria mencionen un nombre y necesites el id_paciente para agendar.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { nombre: { type: 'STRING', description: 'Nombre o parte del nombre del paciente' } },
+      required: ['nombre'],
+    },
+  },
+  {
+    name: 'buscar_terapeuta',
+    description:
+      'Busca un terapeuta por nombre o parte del nombre, para obtener su terapeuta_id. Úsala SIEMPRE que necesites ese ID y no lo tengas ya. Nunca pidas el ID directamente al usuario.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { nombre: { type: 'STRING', description: 'Nombre o parte del nombre del terapeuta' } },
+      required: ['nombre'],
+    },
+  },
+  {
+    name: 'ver_horarios_ocupados',
+    description: 'Consulta los horarios ya ocupados de un terapeuta en una fecha, para saber qué horas están libres.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        terapeuta_id: { type: 'STRING', description: 'UUID del terapeuta' },
+        fecha: { type: 'STRING', description: 'Fecha en formato YYYY-MM-DD' },
+      },
+      required: ['terapeuta_id', 'fecha'],
+    },
+  },
+  {
+    name: 'agendar_cita',
+    description:
+      'Agenda una cita real en el sistema entre un paciente y un terapeuta. Solo úsala cuando ya tengas paciente_id, terapeuta_id y fecha_hora confirmados explícitamente por el usuario. Los IDs SIEMPRE se obtienen con buscar_paciente / buscar_terapeuta, nunca se piden al usuario. Siempre pregunta antes si desean registrar el pago de la sesión en ese momento (igual que el checkbox "Registrar pago de esta sesión ahora" del formulario manual); si dicen que sí, pide monto y método de pago antes de llamar a esta función.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        paciente_id: { type: 'NUMBER', description: 'ID numérico del paciente' },
+        terapeuta_id: { type: 'STRING', description: 'UUID del terapeuta' },
+        fecha_hora: { type: 'STRING', description: 'Fecha y hora ISO, ej: 2026-07-03T16:00:00-06:00' },
+        duracion_min: { type: 'NUMBER', description: 'Duración en minutos, por defecto 60' },
+        notas: { type: 'STRING', description: 'Notas opcionales' },
+        registrar_pago: { type: 'BOOLEAN', description: 'true si el usuario confirmó que quiere registrar el pago de esta sesión ahora' },
+        monto: { type: 'NUMBER', description: 'Monto del pago. Requerido si registrar_pago es true' },
+        metodo_pago: { type: 'STRING', description: 'Uno de: efectivo, transferencia, tarjeta, aseguradora. Requerido si registrar_pago es true' },
+        estado_pago: { type: 'STRING', description: 'Uno de: pendiente, pagado, reembolsado. Por defecto "pagado" si registrar_pago es true (ej. "Pagado ahora"). Usa "pendiente" si el usuario dice que pagará después.' },
+      },
+      required: ['paciente_id', 'terapeuta_id', 'fecha_hora'],
+    },
+  },
+  {
+    name: 'guardar_reporte_sintomas',
+    description:
+      'Guarda el reporte de síntomas del PACIENTE para que su terapeuta lo revise antes de la consulta. Úsala SOLO cuando ya recopilaste: zona del dolor, tipo de dolor, intensidad (0-10), cuándo empezó, qué lo mejora/empeora. El paciente nunca puede ver este reporte después, solo el terapeuta.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        zona_dolor: { type: 'STRING' },
+        tipo_dolor: { type: 'STRING', description: 'punzante, ardor, presión, etc.' },
+        intensidad: { type: 'NUMBER', description: '0 a 10' },
+        inicio_sintomas: { type: 'STRING' },
+        factores_agravantes: { type: 'STRING' },
+        factores_mejora: { type: 'STRING' },
+        sintomas_adicionales: { type: 'STRING' },
+        resumen_ia: { type: 'STRING', description: 'Resumen clínico breve del caso para el terapeuta' },
+      },
+      required: ['zona_dolor', 'intensidad', 'resumen_ia'],
+    },
+  },
+  {
+    name: 'ver_reportes_pacientes',
+    description:
+      'Lista los reportes de síntomas pendientes (no leídos) de los pacientes del TERAPEUTA que está usando el chat. Úsala cuando el terapeuta pida ver reportes de síntomas.',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+]
+
+// Qué función puede usar cada rol — el paciente SOLO reporta síntomas,
+// agendar citas es exclusivo de secretaria/terapeuta. El admin es solo lectura/orientación.
+const FUNCIONES_POR_ROL: Record<string, string[]> = {
+  paciente:   ['guardar_reporte_sintomas'],
+  secretaria: ['buscar_paciente', 'buscar_terapeuta', 'ver_horarios_ocupados', 'agendar_cita'],
+  terapeuta:  ['buscar_paciente', 'ver_horarios_ocupados', 'agendar_cita', 'ver_reportes_pacientes'],
+  admin:      [],
+}
+
+function declaracionesParaRol(rol: string) {
+  const permitidas = FUNCIONES_POR_ROL[rol] ?? []
+  return FUNCTION_DECLARATIONS.filter(f => permitidas.includes(f.name))
+}
+
+// ── Ejecuta la función real contra Supabase ────────────────────────
+async function ejecutarFuncion(
+  supabase: any,
+  name: string,
+  args: any,
+  userId: string,
+  rol: string
+) {
+  switch (name) {
+    case 'buscar_paciente': {
+      const { data, error } = await supabase.rpc('buscar_paciente_por_nombre', { p_nombre: args.nombre })
+      if (error) return { error: error.message }
+      return { resultados: data }
+    }
+    case 'buscar_terapeuta': {
+      const { data, error } = await supabase.rpc('buscar_terapeuta_por_nombre', { p_nombre: args.nombre })
+      if (error) return { error: error.message }
+      return { resultados: data }
+    }
+    case 'ver_horarios_ocupados': {
+      const { data, error } = await supabase.rpc('horarios_ocupados_terapeuta', {
+        p_terapeuta_id: args.terapeuta_id,
+        p_fecha: args.fecha,
+      })
+      if (error) return { error: error.message }
+      return { ocupados: data }
+    }
+    case 'agendar_cita': {
+      if (rol === 'paciente' || rol === 'admin') {
+        return { error: 'Este rol no tiene permiso para agendar citas desde el chat.' }
+      }
+      // El terapeuta agenda para sí mismo: su terapeuta_id es su propio userId,
+      // nunca se le pide ni se le hace buscarse a sí mismo.
+      const terapeutaId = rol === 'terapeuta' ? userId : args.terapeuta_id
+      if (!terapeutaId) {
+        return { error: 'Falta identificar al terapeuta. Usa buscar_terapeuta primero.' }
+      }
+      const registrarPago = args.registrar_pago === true
+      const { data, error } = await supabase.rpc('agendar_cita_chatbot', {
+        p_paciente_id: args.paciente_id,
+        p_terapeuta_id: terapeutaId,
+        p_fecha_hora: args.fecha_hora,
+        p_duracion_min: args.duracion_min ?? 60,
+        p_notas: args.notas ?? null,
+        p_created_by: userId,
+        p_registrar_pago: registrarPago,
+        p_monto: registrarPago ? args.monto ?? null : null,
+        p_metodo_pago: registrarPago ? args.metodo_pago ?? null : null,
+        p_estado_pago: registrarPago ? (args.estado_pago ?? 'pagado') : 'pendiente',
+      })
+      if (error) return { error: error.message }
+      return data
+    }
+    case 'guardar_reporte_sintomas': {
+      if (rol !== 'paciente') return { error: 'Solo el paciente puede reportar sus propios síntomas.' }
+      const { data: miPaciente } = await supabase
+        .from('pacientes').select('id_paciente, terapeuta_id').eq('profile_id', userId).single()
+      if (!miPaciente) return { error: 'No se encontró el expediente del paciente.' }
+
+      const { error } = await supabase.from('reportes_sintomas').insert({
+        paciente_id: miPaciente.id_paciente,
+        terapeuta_id: miPaciente.terapeuta_id,
+        zona_dolor: args.zona_dolor,
+        tipo_dolor: args.tipo_dolor ?? null,
+        intensidad: args.intensidad,
+        inicio_sintomas: args.inicio_sintomas ?? null,
+        factores_agravantes: args.factores_agravantes ?? null,
+        factores_mejora: args.factores_mejora ?? null,
+        sintomas_adicionales: args.sintomas_adicionales ?? null,
+        resumen_ia: args.resumen_ia,
+      })
+      if (error) return { error: error.message }
+      return { exito: true, mensaje: 'Reporte guardado. Tu terapeuta lo revisará antes de tu próxima consulta.' }
+    }
+    case 'ver_reportes_pacientes': {
+      if (rol !== 'terapeuta') return { error: 'Solo el terapeuta puede ver estos reportes.' }
+      const { data, error } = await supabase
+        .from('reportes_sintomas')
+        .select('id_reporte, paciente_id, zona_dolor, intensidad, resumen_ia, leido_por_terapeuta, created_at, pacientes(nombre_completo)')
+        .eq('terapeuta_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      if (error) return { error: error.message }
+      return { reportes: data }
+    }
+    default:
+      return { error: 'Función no reconocida' }
+  }
+}
+
+// ── Contexto dinámico desde Supabase ───────────────────────────────
 async function obtenerContexto(supabase: any, userId: string, rol: string) {
   const hoy = new Date().toISOString().split('T')[0]
-  let contexto = ''
-
-  if (rol === 'admin') {
-    const [
-      { count: totalPacientes },
-      { count: citasHoy },
-      { data: pagsPendientes },
-    ] = await Promise.all([
-      supabase.from('pacientes').select('*', { count:'exact', head:true }).eq('activo', true),
-      supabase.from('citas').select('*', { count:'exact', head:true }).gte('fecha_hora', `${hoy}T00:00:00`).lte('fecha_hora', `${hoy}T23:59:59`),
-      supabase.from('pagos').select('monto').eq('estado_pago', 'pendiente'),
-    ])
-    const totalAdeudos = (pagsPendientes ?? []).reduce((s: number, p: any) => s + Number(p.monto), 0)
-    contexto = `Contexto actual del sistema:
-- Pacientes activos: ${totalPacientes ?? 0}
-- Citas programadas hoy: ${citasHoy ?? 0}
-- Adeudos pendientes totales: $${totalAdeudos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-
-  } else if (rol === 'secretaria') {
-    const { data: citasHoyData } = await supabase
-      .from('citas')
-      .select('id_cita, fecha_hora, estado, pacientes(nombre_completo)')
-      .gte('fecha_hora', `${hoy}T00:00:00`)
-      .lte('fecha_hora', `${hoy}T23:59:59`)
-      .order('fecha_hora')
-    const { count: pagsPend } = await supabase
-      .from('pagos').select('*', { count:'exact', head:true }).eq('estado_pago', 'pendiente')
-    contexto = `Contexto de hoy (${hoy}):
-- Citas del día: ${(citasHoyData ?? []).length}
-${(citasHoyData ?? []).map((c: any) => `  • ${new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:true })} — ${c.pacientes?.nombre_completo ?? 'Paciente'} (${c.estado})`).join('\n')}
-- Pagos pendientes en el sistema: ${pagsPend ?? 0}`
-
-  } else if (rol === 'terapeuta') {
-    const { data: misPacientes } = await supabase
-      .from('pacientes')
-      .select('id_paciente, nombre_completo, activo')
-      .eq('terapeuta_id', userId)
-      .eq('activo', true)
-      .limit(20)
-    const { data: citasHoyData } = await supabase
-      .from('citas')
-      .select('id_cita, fecha_hora, estado, pacientes(nombre_completo)')
-      .eq('terapeuta_id', userId)
-      .gte('fecha_hora', `${hoy}T00:00:00`)
-      .lte('fecha_hora', `${hoy}T23:59:59`)
-      .order('fecha_hora')
-    contexto = `Tus pacientes activos (${(misPacientes ?? []).length}):
-${(misPacientes ?? []).map((p: any) => `  • ${p.nombre_completo}`).join('\n')}
-
-Tus citas de hoy:
-${(citasHoyData ?? []).length === 0 ? '  Sin citas programadas para hoy' : (citasHoyData ?? []).map((c: any) => `  • ${new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:true })} — ${c.pacientes?.nombre_completo ?? 'Paciente'} (${c.estado})`).join('\n')}`
-
-  } else if (rol === 'paciente') {
-    const { data: miPaciente } = await supabase
-      .from('pacientes')
-      .select('id_paciente, nombre_completo')
-      .eq('profile_id', userId)
-      .single()
-
-    if (miPaciente) {
-      const [{ data: proximasCitas }, { data: misPagos }, { data: miProgreso }] = await Promise.all([
-        supabase.from('citas').select('fecha_hora, estado, notas').eq('paciente_id', miPaciente.id_paciente).gte('fecha_hora', new Date().toISOString()).order('fecha_hora').limit(3),
-        supabase.from('pagos').select('monto, estado_pago, fecha_pago').eq('paciente_id', miPaciente.id_paciente).order('fecha_pago', { ascending: false }).limit(5),
-        supabase.from('progreso_sesiones').select('nivel_dolor, movilidad, observaciones, fecha_registro').eq('paciente_id', miPaciente.id_paciente).order('fecha_registro', { ascending: false }).limit(3),
+  let ctx = ''
+  try {
+    if (rol === 'admin') {
+      const [{ count: totalPacientes }, { count: citasHoy }, { data: pagsPendientes }] = await Promise.all([
+        supabase.from('pacientes').select('*', { count: 'exact', head: true }).eq('activo', true),
+        supabase.from('citas').select('*', { count: 'exact', head: true })
+          .gte('fecha_hora', `${hoy}T00:00:00`).lte('fecha_hora', `${hoy}T23:59:59`),
+        supabase.from('pagos').select('monto').eq('estado_pago', 'pendiente'),
       ])
-      const pagPendiente = (misPagos ?? []).filter((p: any) => p.estado_pago === 'pendiente').reduce((s: number, p: any) => s + Number(p.monto), 0)
-      contexto = `Información del paciente: ${miPaciente.nombre_completo}
-
-Próximas citas:
-${(proximasCitas ?? []).length === 0 ? '  Sin citas próximas' : (proximasCitas ?? []).map((c: any) => `  • ${new Date(c.fecha_hora).toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long' })} a las ${new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:true })} (${c.estado})`).join('\n')}
-
-Pagos pendientes: $${pagPendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-
-Últimas sesiones de progreso:
-${(miProgreso ?? []).length === 0 ? '  Sin progreso registrado' : (miProgreso ?? []).map((p: any) => `  • ${new Date(p.fecha_registro).toLocaleDateString('es-MX')} — Dolor: ${p.nivel_dolor}/10, Movilidad: ${p.movilidad}/10`).join('\n')}`
+      const totalAdeudos = (pagsPendientes ?? []).reduce((s: number, p: any) => s + Number(p.monto), 0)
+      ctx = `DATOS EN TIEMPO REAL (hoy ${hoy}):
+- Pacientes activos: ${totalPacientes ?? 0}
+- Citas hoy: ${citasHoy ?? 0}
+- Adeudos pendientes: $${totalAdeudos.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+    } else if (rol === 'secretaria') {
+      const { data: citasData } = await supabase
+        .from('citas').select('fecha_hora, estado, pacientes(nombre_completo)')
+        .gte('fecha_hora', `${hoy}T00:00:00`).lte('fecha_hora', `${hoy}T23:59:59`).order('fecha_hora')
+      const { count: pagsPend } = await supabase
+        .from('pagos').select('*', { count: 'exact', head: true }).eq('estado_pago', 'pendiente')
+      ctx = `DATOS HOY (${hoy}):
+- Citas del día: ${(citasData ?? []).length}
+${(citasData ?? []).map((c: any) =>
+  `  • ${new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })} — ${c.pacientes?.nombre_completo ?? 'Paciente'} (${c.estado})`
+).join('\n')}
+- Pagos pendientes: ${pagsPend ?? 0}`
+    } else if (rol === 'terapeuta') {
+      const { data: misPacientes } = await supabase
+        .from('pacientes').select('nombre_completo').eq('terapeuta_id', userId).eq('activo', true).limit(20)
+      const { data: citasData } = await supabase
+        .from('citas').select('fecha_hora, estado, pacientes(nombre_completo)')
+        .eq('terapeuta_id', userId)
+        .gte('fecha_hora', `${hoy}T00:00:00`).lte('fecha_hora', `${hoy}T23:59:59`).order('fecha_hora')
+      const { count: reportesPendientes } = await supabase
+        .from('reportes_sintomas').select('*', { count: 'exact', head: true })
+        .eq('terapeuta_id', userId).eq('leido_por_terapeuta', false)
+      ctx = `MIS DATOS HOY:
+- Pacientes activos (${(misPacientes ?? []).length}): ${(misPacientes ?? []).map((p: any) => p.nombre_completo).join(', ') || 'ninguno'}
+- Citas hoy: ${(citasData ?? []).length === 0 ? 'Sin citas' : (citasData ?? []).map((c: any) =>
+  `${new Date(c.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true })} — ${c.pacientes?.nombre_completo} (${c.estado})`
+).join(' | ')}
+- Reportes de síntomas sin leer: ${reportesPendientes ?? 0} (usa ver_reportes_pacientes si te los piden)`
+    } else if (rol === 'paciente') {
+      const { data: miPaciente } = await supabase
+        .from('pacientes').select('id_paciente, nombre_completo').eq('profile_id', userId).single()
+      if (miPaciente) {
+        const [{ data: citas }, { data: pagos }, { data: progreso }] = await Promise.all([
+          supabase.from('citas').select('fecha_hora, estado')
+            .eq('paciente_id', miPaciente.id_paciente).gte('fecha_hora', new Date().toISOString())
+            .order('fecha_hora').limit(3),
+          supabase.from('pagos').select('monto, estado_pago')
+            .eq('paciente_id', miPaciente.id_paciente).order('fecha_pago', { ascending: false }).limit(3),
+          supabase.from('progreso_sesiones').select('nivel_dolor, movilidad, fecha_registro')
+            .eq('paciente_id', miPaciente.id_paciente).order('fecha_registro', { ascending: false }).limit(5),
+        ])
+        const pendiente = (pagos ?? []).filter((p: any) => p.estado_pago === 'pendiente')
+          .reduce((s: number, p: any) => s + Number(p.monto), 0)
+        ctx = `DATOS DE: ${miPaciente.nombre_completo}
+- Próximas citas: ${(citas ?? []).length === 0 ? 'Sin citas próximas' : (citas ?? []).map((c: any) =>
+  `${new Date(c.fecha_hora).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })} (${c.estado})`
+).join(', ')}
+- Adeudo: $${pendiente.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+- Últimas sesiones: ${(progreso ?? []).length === 0 ? 'Sin registros' : (progreso ?? []).map((p: any) =>
+  `dolor ${p.nivel_dolor}/10, movilidad ${p.movilidad}%`
+).join(' | ')}`
+      }
     }
+  } catch (e) {
+    console.error('Error contexto:', e)
+  }
+  return ctx
+}
+
+// ── Prompts ─────────────────────────────────────────────────────────
+const BASE_PROMPT = `
+IDENTIDAD
+Eres RehabControl AI, el asistente oficial de la clínica Rehabilitandomed.
+
+IMPORTANTE — NO ERES ESPECIALISTA:
+No eres médico ni fisioterapeuta titulado. Puedes orientar, dar información general y
+buscar en internet protocolos o información relevante, pero SIEMPRE deja claro que:
+- No sustituyes una valoración profesional.
+- Si el usuario quiere información médica más profunda o tiene dudas serias sobre su
+  condición, debes recomendarle explícitamente que lo consulte con su terapeuta o un especialista.
+- Ante dolor intenso (7/10 o más) o señales de alarma, indícale contactar a la clínica de inmediato.
+
+CAPACIDADES REALES (function calling) — varían según el rol:
+- agendar_cita / buscar_paciente / buscar_terapeuta / ver_horarios_ocupados: SOLO secretaria y terapeuta.
+  El paciente NO puede agendar citas por el chat; si pide una cita, indícale que la
+  secretaria la confirma (puede llamar o ir al módulo de citas).
+  El admin tampoco agenda citas desde el chat: solo tiene visión de datos y orientación.
+- guardar_reporte_sintomas: SOLO paciente, guarda su reporte para el terapeuta.
+- ver_reportes_pacientes: SOLO terapeuta, lista los reportes de sus pacientes.
+
+OBTENCIÓN DE IDs (paciente_id, terapeuta_id):
+NUNCA pidas un ID directamente al usuario. Esos datos SOLO se obtienen ejecutando
+buscar_paciente o buscar_terapeuta con el nombre que te den. Si la búsqueda no encuentra
+resultados, pide el nombre completo o el apellido (nunca el ID). Si hay varios resultados,
+muéstralos y pregunta cuál es el correcto antes de continuar.
+
+MANEJO DE SÍNTOMAS DEL PACIENTE (rol paciente — su única acción real en el chat):
+Cuando un paciente describe dolores, haz preguntas de seguimiento una a la vez:
+zona exacta, tipo de dolor, intensidad 0-10, cuándo empezó, qué lo mejora/empeora,
+otros síntomas. Cuando ya tengas información suficiente, llama a guardar_reporte_sintomas.
+Después dile: "Gracias por compartir esto. Tu terapeuta lo revisará antes de tu próxima
+consulta." NUNCA le des un diagnóstico ni le digas qué podría tener — eso es solo para el
+reporte del terapeuta. El paciente NO puede ver este reporte después.
+
+RESTRICCIONES:
+- No dar diagnósticos médicos al paciente.
+- No prescribir medicamentos.
+- No ejecutar acciones (citas, reportes) sin confirmación o sin la información necesaria.
+- No acceder a datos de otros roles.
+- NUNCA pidas un ID (paciente_id, terapeuta_id, UUID) directamente al usuario.
+
+FORMATO:
+- Pasos numerados para procesos.
+- ✅ Confirmar antes de acciones reales.
+- ⚠️ Advertencias de seguridad cuando aplique.
+- 💡 Recomendación al final.
+- Máximo 4 párrafos. Sin markdown excesivo.
+Responde siempre en español.
+`
+
+const ROL_CONTEXTO: Record<string, string> = {
+  admin: `
+ROL: ADMIN — Acceso total de SOLO LECTURA y orientación en Rehabilitandomed. No ejecutas acciones de citas ni de ningún otro tipo desde el chat.
+Módulos: /admin/dashboard · /admin/usuarios · /admin/expedientes · /admin/finanzas · /admin/reportes · /admin/logs · /admin/configuracion · /admin/opiniones
+CITAS — NO ES TU FUNCIÓN: si te piden agendar, modificar o cancelar una cita, explica que
+debe hacerse desde el módulo /admin/... correspondiente o que la secretaria la gestione.
+Tú no tienes ninguna función ejecutable: solo orientas con los datos en tiempo real y
+conocimiento clínico general.
+ORIENTACIÓN CLÍNICA GENERAL (no diagnóstico):
+- Lumbar: hernia discal, sobrecarga muscular, escoliosis, sedentarismo.
+- Rodilla: meniscopatía, LCA/LCP, condromalacia, artritis.
+- Hombro: manguito rotador, capsulitis adhesiva, impingement.
+- Cervical: contractura, hernia C5-C6, síndrome de oficina.
+`,
+  secretaria: `
+ROL: SECRETARIA — Gestión operativa de Rehabilitandomed.
+Módulos: /secretaria/dashboard · /secretaria/pacientes · /secretaria/citas · /secretaria/pagos
+
+FLUJO PARA AGENDAR CITA (sigue este orden, sin saltarte pasos ni pedir IDs):
+1. Si no tienes paciente_id → llama a buscar_paciente con el nombre que te den.
+   - Sin resultados: pide nombre completo o apellido, NUNCA pidas el ID.
+   - Varios resultados: muéstralos y pregunta cuál es el correcto.
+2. Si no tienes terapeuta_id → llama a buscar_terapeuta con el nombre del terapeuta.
+   - Mismo manejo de "no encontrado" / "varios resultados".
+3. Si hay duda de disponibilidad, usa ver_horarios_ocupados con el terapeuta_id ya obtenido.
+4. Antes de agendar, pregunta: "¿Deseas registrar el pago de esta sesión ahora?" (igual que
+   el checkbox del formulario manual). Si dicen que sí, pide monto y método de pago
+   (efectivo, transferencia, tarjeta o aseguradora) y si quedó pagado o pendiente.
+5. Confirma fecha y hora con el usuario y SOLO entonces llama a agendar_cita,
+   usando los IDs ya obtenidos y, si aplica, los datos del pago.
+`,
+  terapeuta: `
+ROL: TERAPEUTA — Gestión clínica de pacientes asignados.
+Módulos: /terapeuta/dashboard · /terapeuta/pacientes · /terapeuta/expedientes · /terapeuta/progreso · /terapeuta/citas · /terapeuta/ejercicios
+ACCIONES DISPONIBLES:
+✅ ver_reportes_pacientes → reportes de síntomas que tus pacientes llenaron en el chat.
+✅ agendar_cita / buscar_paciente / ver_horarios_ocupados.
+NOTA: cuando agendas una cita, el terapeuta_id eres tú mismo automáticamente — no necesitas
+buscarte ni dar tu propio ID, solo resuelve el paciente_id con buscar_paciente.
+NOTA DE PAGO: antes de agendar, pregunta si desean registrar el pago de la sesión ahora.
+Si dicen que sí, pide monto y método de pago (efectivo, transferencia, tarjeta o aseguradora).
+CATÁLOGO DE EJERCICIOS:
+RODILLA: cuádriceps arco corto, prensa unilateral, sentadilla TRX, bicicleta, step up/down.
+LUMBAR: bird-dog, puente glúteo, plancha, McKenzie, estiramiento piriforme.
+HOMBRO: péndulos Codman, rotación con banda, elevación frontal/lateral, remo con banda.
+CERVICAL: chin tuck, flexión isométrica, estiramiento trapecio, movilización activa.
+TOBILLO: alfabeto con tobillo, elevaciones de talón, tabla de equilibrio, estiramiento fascia.
+`,
+  paciente: `
+ROL: PACIENTE — Portal personal Rehabilitandomed. Todo es de SOLO LECTURA, excepto el perfil.
+Módulos: /paciente/dashboard · /paciente/citas · /paciente/progreso · /paciente/ejercicios · /paciente/pagos · /paciente/perfil
+
+ACCIÓN DISPONIBLE (la única real vía función):
+✅ guardar_reporte_sintomas → cuéntame tus dolores, te haré preguntas y guardaré el reporte
+   para tu terapeuta (tú no podrás verlo después, solo él/ella).
+
+CITAS — NO ES TU FUNCIÓN:
+No tienes ninguna capacidad de agendar, modificar ni cancelar citas desde el chat, ni la
+tendrás aunque insistas. Si preguntan por agendar, explica amablemente que deben solicitarla
+con la secretaria (módulo /paciente/citas o contactando directamente a la clínica). No ofrezcas
+alternativas como "puedo intentarlo" — simplemente no es posible desde aquí.
+
+PAGOS Y PROGRESO — SOLO ORIENTACIÓN:
+Los datos de pagos y progreso que ves en el contexto son informativos. Tu trabajo es explicar
+qué significan (p. ej. qué es un adeudo pendiente, qué indica su nivel de dolor o movilidad),
+nunca procesar pagos, generar comprobantes ni modificar registros — eso no existe como acción tuya.
+
+INTERPRETACIÓN DE PROGRESO (informativa, no diagnóstico):
+Dolor: 0-2 mínimo ✅ · 3-4 leve · 5-6 moderado ⚠️ avisa a tu terapeuta · 7-10 intenso 🔴 contacta la clínica ya.
+Movilidad: 90-100% óptima · 70-89% buena · 50-69% moderada · <50% limitada.
+`,
+}
+
+// ── Helper: ejecuta Gemini con loop de function calling ────────────
+async function llamarGeminiConFunciones(
+  systemPrompt: string,
+  contents: GeminiMsg[],
+  supabase: any,
+  userId: string,
+  rol: string,
+  apiKey: string
+): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+  let turnos = [...contents]
+  let intentos = 0
+  let huboFuncion = false
+  const funcionesPermitidas = declaracionesParaRol(rol)
+
+  // ── Fase 1: solo function calling (acciones reales) ────────────
+  // Gemini NO permite combinar google_search con function_declarations
+  // en la misma llamada, así que primero resolvemos acciones.
+  while (intentos < 5) {
+    const body: any = {
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: turnos,
+      generation_config: { temperature: 0.3, max_output_tokens: 800 },
+    }
+    if (funcionesPermitidas.length > 0) {
+      body.tools = [{ function_declarations: funcionesPermitidas }]
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('❌ Gemini (function calling):', err)
+      return 'Tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.'
+    }
+
+    const data = await res.json()
+    const parts: GeminiPart[] = data.candidates?.[0]?.content?.parts ?? []
+    const funcCalls = parts.filter(p => p.functionCall)
+
+    if (funcCalls.length === 0) {
+      const texto = parts.filter(p => p.text).map(p => p.text).join('')
+      // Si nunca se ejecutó ninguna función, es una pregunta general:
+      // reintentamos UNA vez con búsqueda web para enriquecer la respuesta.
+      if (!huboFuncion) {
+        const conBusqueda = await llamarGeminiConBusqueda(systemPrompt, turnos, apiKey)
+        if (conBusqueda) return conBusqueda
+      }
+      return texto || 'No pude generar una respuesta.'
+    }
+
+    huboFuncion = true
+    turnos.push({ role: 'model', parts })
+
+    const responseParts: GeminiPart[] = []
+    for (const fc of funcCalls) {
+      const { name, args } = fc.functionCall!
+      const resultado = await ejecutarFuncion(supabase, name, args, userId, rol)
+      responseParts.push({ functionResponse: { name, response: resultado } })
+    }
+    turnos.push({ role: 'function', parts: responseParts })
+
+    intentos++
   }
 
-  return contexto
+  return 'No pude completar la acción, intenta reformular tu solicitud.'
 }
 
-const SYSTEM_PROMPTS: Record<string, string> = {
-  admin: `Eres el asistente de RehabControl para el administrador de la clínica Rehabilitandomed. Tienes acceso a información del sistema y puedes responder preguntas sobre pacientes, citas, pagos, usuarios y configuración. Responde siempre en español, de forma concisa y profesional. Si el administrador pregunta sobre datos específicos que no tienes, indícale en qué sección del sistema puede encontrarlos.`,
-
-  secretaria: `Eres el asistente de RehabControl para la secretaria de la clínica Rehabilitandomed. Puedes ayudar con información sobre citas del día, pagos pendientes, registro de pacientes y operación general. Responde en español de forma clara y práctica. Si no tienes la información exacta, guía a la secretaria al módulo correspondiente del sistema.`,
-
-  terapeuta: `Eres el asistente de RehabControl para un terapeuta de la clínica Rehabilitandomed. Puedes ayudar con información sobre sus pacientes asignados, citas del día, registro de progreso y expedientes clínicos. Responde en español de forma profesional y clínica. No inventes diagnósticos ni tratamientos — solo proporciona información del sistema.`,
-
-  paciente: `Eres el asistente de Rehabilitandomed, una clínica de rehabilitación física. Estás hablando con un paciente que tiene acceso a su portal personal. Puedes ayudarle con información sobre sus próximas citas, el estado de sus pagos, su progreso de sesiones y preguntas generales sobre la clínica. Responde en español de forma amable, clara y empática. No proporciones consejos médicos — para dudas clínicas, indica que consulte directamente con su terapeuta.`,
+// ── Fase 2 (opcional): solo búsqueda web, sin function calling ─────
+async function llamarGeminiConBusqueda(
+  systemPrompt: string,
+  contents: GeminiMsg[],
+  apiKey: string
+): Promise<string | null> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        tools: [{ google_search: {} }],
+        generation_config: { temperature: 0.3, max_output_tokens: 800 },
+      }),
+    })
+    if (!res.ok) {
+      console.error('❌ Gemini (búsqueda):', await res.text())
+      return null
+    }
+    const data = await res.json()
+    const parts: GeminiPart[] = data.candidates?.[0]?.content?.parts ?? []
+    return parts.filter(p => p.text).map(p => p.text).join('') || null
+  } catch (e) {
+    console.error('❌ Error en búsqueda web:', e)
+    return null
+  }
 }
 
+// ── GET: cargar historial guardado del usuario ──────────────────────
+export async function GET() {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError) console.error('❌ GET auth error:', authError.message)
+    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+
+    const { data, error } = await supabase
+      .from('chatbot_historial')
+      .select('role, content, created_at')
+      .eq('profile_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (error) {
+      console.error('❌ GET historial — error de Supabase:', error.message, error.details, error.hint)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ historial: data ?? [] })
+  } catch (err: any) {
+    console.error('❌ GET historial — error inesperado:', err?.message ?? err)
+    return NextResponse.json({ error: err?.message ?? 'Error interno' }, { status: 500 })
+  }
+}
+
+// ── POST: enviar mensaje ─────────────────────────────────────────────
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
 
-    const { data: profile } = await supabase
-      .from('profiles').select('rol').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('rol').eq('id', user.id).single()
     const rol = profile?.rol ?? 'paciente'
 
     const body = await request.json()
-    const { messages } = body // array de { role: 'user'|'assistant', content: string }
+    const mensajes: { role: 'user' | 'assistant'; content: string }[] =
+      body.messages?.length
+        ? body.messages
+        : [
+            ...(body.history ?? []).map((m: any) => ({
+              role: m.role === 'model' ? 'assistant' : 'user' as const,
+              content: m.parts?.[0]?.text ?? '',
+            })),
+            ...(body.message ? [{ role: 'user' as const, content: body.message }] : []),
+          ]
 
-    if (!messages?.length) {
+    if (!mensajes.length && !body.file) {
       return NextResponse.json({ error: 'Mensajes requeridos' }, { status: 400 })
     }
 
-    // Obtener contexto dinámico del usuario
+    const GEMINI_KEY = process.env.GEMINI_API_KEY
+    if (!GEMINI_KEY) return NextResponse.json({ error: 'Configuración incompleta' }, { status: 500 })
+
     const contexto = await obtenerContexto(supabase, user.id, rol)
+    const systemPrompt = `${BASE_PROMPT}
+${ROL_CONTEXTO[rol] ?? ''}
+MÓDULO ACTUAL: ${body.modulo ?? 'DASHBOARD'}
+${contexto ? `\nCONTEXTO EN TIEMPO REAL:\n${contexto}` : ''}`
 
-    const systemPrompt = `${SYSTEM_PROMPTS[rol] ?? SYSTEM_PROMPTS.paciente}
+    const geminiHistory: GeminiMsg[] = mensajes.slice(0, -1).map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
 
-${contexto ? `\n${contexto}\n` : ''}
+    const ultimoTexto = mensajes[mensajes.length - 1]?.content ?? ''
+    const lastParts: GeminiPart[] = []
 
-Responde siempre en español. Sé conciso — máximo 3 párrafos por respuesta. No uses markdown extenso, prefiere texto simple y claro.`
+    if (body.file?.base64 && body.file?.mimeType) {
+      const { base64, mimeType, name } = body.file
+      if (mimeType.startsWith('image/') || mimeType === 'application/pdf') {
+        lastParts.push({ inline_data: { mime_type: mimeType, data: base64 } })
+      } else {
+        try {
+          const decoded = Buffer.from(base64, 'base64').toString('utf-8')
+          lastParts.push({ text: `Archivo "${name}":\n\n${decoded}` })
+        } catch {
+          lastParts.push({ text: `El usuario adjuntó: ${name}` })
+        }
+      }
+    }
+    lastParts.push({ text: ultimoTexto.trim() || 'Analiza este archivo.' })
+    const lastMsg: GeminiMsg = { role: 'user', parts: lastParts }
 
-    // Llamar a la API de Anthropic
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'x-api-key': process.env.ANTHROPIC_API_KEY ?? '',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
-        system: systemPrompt,
-        messages: messages.slice(-10), // últimos 10 mensajes para contexto
-      }),
-    })
+    const respuesta = await llamarGeminiConFunciones(
+      systemPrompt,
+      [...geminiHistory, lastMsg],
+      supabase,
+      user.id,
+      rol,
+      GEMINI_KEY
+    )
 
-    const data = await anthropicRes.json()
-
-    if (!anthropicRes.ok) {
-      console.error('Anthropic error:', data)
-      return NextResponse.json({ error: 'Error al procesar tu pregunta' }, { status: 500 })
+    // ── Persistir el intercambio en el historial del chat ───────────
+    try {
+      await supabase.from('chatbot_historial').insert([
+        { profile_id: user.id, role: 'user', content: ultimoTexto || `📎 ${body.file?.name ?? 'archivo'}`, modulo: body.modulo ?? null },
+        { profile_id: user.id, role: 'assistant', content: respuesta, modulo: body.modulo ?? null },
+      ])
+    } catch (e) {
+      console.error('Error guardando historial:', e)
     }
 
-    const respuesta = data.content?.[0]?.text ?? 'No pude generar una respuesta.'
-    return NextResponse.json({ respuesta, rol })
-
+    return NextResponse.json({ reply: respuesta, rol })
   } catch (err) {
-    console.error('Chatbot error:', err)
+    console.error('❌ Chatbot error:', err)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
