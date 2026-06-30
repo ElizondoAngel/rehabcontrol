@@ -23,13 +23,21 @@ export default async function ExpedientePage({
     redirect('/unauthorized')
   }
 
-  // El paciente debe existir Y estar asignado a este terapeuta
-  const { data: paciente } = await supabase
+  const esAdmin = profile?.rol === 'admin'
+
+  // El paciente debe existir. Si es terapeuta, además debe estar asignado a él.
+  // Si es admin, puede ver cualquier paciente (vista global, sin restricción
+  // de terapeuta_id — el admin no es terapeuta de nadie).
+  let pacienteQuery = supabase
     .from('pacientes')
     .select('id_paciente, nombre_completo, curp, fecha_nacimiento, telefono, activo, terapeuta_id')
     .eq('id_paciente', id_paciente)
-    .eq('terapeuta_id', user.id)
-    .single()
+
+  if (!esAdmin) {
+    pacienteQuery = pacienteQuery.eq('terapeuta_id', user.id)
+  }
+
+  const { data: paciente } = await pacienteQuery.single()
 
   if (!paciente) notFound()
 

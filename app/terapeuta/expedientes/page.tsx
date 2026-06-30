@@ -17,18 +17,32 @@ export default async function ExpedientesIndexPage() {
     redirect('/unauthorized')
   }
 
-  // Pacientes asignados a este terapeuta
-  const { data: pacientes } = await supabase
+  const esAdmin = profile?.rol === 'admin'
+
+  // Terapeuta: solo SUS pacientes asignados.
+  // Admin: TODOS los pacientes (vista global, sin filtrar por terapeuta_id,
+  // ya que el admin no es terapeuta de nadie y ese filtro le dejaba todo vacío).
+  let pacientesQuery = supabase
     .from('pacientes')
     .select('id_paciente, nombre_completo, curp, telefono, activo')
-    .eq('terapeuta_id', user.id)
     .order('nombre_completo', { ascending: true })
 
-  // Expedientes de esos pacientes (para saber cuáles ya tienen y su estado)
-  const { data: expedientes } = await supabase
+  if (!esAdmin) {
+    pacientesQuery = pacientesQuery.eq('terapeuta_id', user.id)
+  }
+
+  const { data: pacientes } = await pacientesQuery
+
+  // Mismo criterio para expedientes
+  let expedientesQuery = supabase
     .from('expedientes')
     .select('id_expediente, paciente_id, estado, updated_at, fecha_apertura')
-    .eq('terapeuta_id', user.id)
+
+  if (!esAdmin) {
+    expedientesQuery = expedientesQuery.eq('terapeuta_id', user.id)
+  }
+
+  const { data: expedientes } = await expedientesQuery
 
   return (
     <ExpedientesIndexClient
