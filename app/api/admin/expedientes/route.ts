@@ -50,11 +50,16 @@ export async function GET(request: Request) {
     const paciente_id = searchParams.get('paciente_id')
     if (!paciente_id) return NextResponse.json({ error: 'paciente_id requerido' }, { status: 400 })
 
+    // NOTA: 'pacientes' tiene DOS llaves foráneas hacia 'profiles'
+    // (profile_id y terapeuta_id) — hay que indicar explícitamente cuál
+    // usar con profiles!nombre_constraint(...), si no la query entera
+    // falla por relación ambigua (y este código caía silenciosamente
+    // al 404 sin que se notara en consola).
     const { data: paciente, error } = await supabase
       .from('pacientes')
       .select(`
         *,
-        profiles(nombre_completo),
+        profiles!pacientes_profile_id_fkey(nombre_completo),
         expedientes(*),
         citas(
           id_cita, fecha_hora, estado, notas, duracion_min,
@@ -66,10 +71,14 @@ export async function GET(request: Request) {
       .order('fecha_hora', { referencedTable: 'citas', ascending: false })
       .single()
 
-    if (error) return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 })
+    if (error) {
+      console.error('Error GET /api/admin/expedientes:', JSON.stringify(error, null, 2))
+      return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 })
+    }
 
     return NextResponse.json({ paciente })
-  } catch {
+  } catch (err) {
+    console.error('Error interno GET /api/admin/expedientes:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
