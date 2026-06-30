@@ -12,7 +12,7 @@ export default async function ExpedientesPage() {
   if (!['admin', 'secretaria'].includes(profile?.rol ?? '')) redirect('/unauthorized')
 
   // Pacientes con su expediente (si tienen) y métricas básicas
-  const { data: pacientes } = await supabase
+  const { data: pacientes, error: errorPacientes } = await supabase
     .from('pacientes')
     .select(`
       id_paciente, nombre_completo, fecha_nacimiento, telefono, activo, created_at,
@@ -22,6 +22,13 @@ export default async function ExpedientesPage() {
       pagos(id_pago, estado_pago, monto)
     `)
     .order('nombre_completo', { ascending: true })
+
+  // DEBUG TEMPORAL — quitar una vez identificada la causa.
+  // Esto aparece en Vercel → Logs (Runtime Logs), no en la consola del navegador.
+  if (errorPacientes) {
+    console.error('Error al cargar pacientes en /admin/expedientes:', JSON.stringify(errorPacientes, null, 2))
+  }
+  console.log('DEBUG pacientes count:', pacientes?.length ?? 'null')
 
   const pacientesIniciales = (pacientes ?? []).map((paciente: any) => ({
     ...paciente,
