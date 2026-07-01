@@ -21,6 +21,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Paciente {
@@ -64,6 +66,7 @@ interface Props {
   sesionesIniciales: Sesion[]
   citasDisponibles: CitaDisponible[]
   userNombre: string
+  userId: string
 }
 
 const TIPOS_ACEPTADOS = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'video/quicktime', 'video/webm']
@@ -182,7 +185,7 @@ function ArchivoThumb({ archivo, idSesion }: { archivo: ArchivoProgreso; idSesio
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function ProgresoDetalleClient({ paciente, sesionesIniciales, citasDisponibles, userNombre }: Props) {
+export default function ProgresoDetalleClient({ paciente, sesionesIniciales, citasDisponibles, userNombre, userId }: Props) {
   const [sesiones, setSesiones] = useState<Sesion[]>(sesionesIniciales)
   const [disponibles, setDisponibles] = useState<CitaDisponible[]>(citasDisponibles)
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -313,24 +316,6 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
         }
         body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
 
-        .sidebar{width:260px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-        .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
-        .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;box-shadow:0 0 18px rgba(56,189,248,0.3)}
-        .sb-name{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.01em}
-        .sb-ver{font-size:10px;color:var(--muted)}
-        .sb-role{margin:12px 12px 4px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:32px;height:32px;border-radius:9px;background:rgba(56,189,248,0.14);border:1px solid rgba(56,189,248,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-        .sb-role-name{font-size:13px;font-weight:600;color:var(--text)}
-        .sb-role-sub{font-size:11px;color:var(--cyan)}
-        .sb-nav{flex:1;padding:8px 10px}
-        .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .18s;margin-bottom:2px}
-        .sb-nav a:hover{background:var(--surface2);color:var(--text)}
-        .sb-nav a.active{background:linear-gradient(135deg,rgba(37,99,235,0.18),rgba(56,189,248,0.12));color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(56,189,248,0.2)}
-        .sb-nav-icon{font-size:16px;width:20px;text-align:center}
-        .sb-bottom{padding:12px 10px;border-top:1px solid var(--border)}
-        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .18s}
-        .sb-bottom a:hover{color:var(--red)}
 
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
         .topbar{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0}
@@ -464,43 +449,31 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
         @media (max-width:900px){ .form-grid,.resumen-grid{grid-template-columns:1fr} }
       `}</style>
 
-      <div className="sidebar">
-        <div className="sb-brand">
-          <div className="sb-logo-row">
-            <div className="sb-logo">RC</div>
-            <div><div className="sb-name">RehabControl</div><div className="sb-ver">v2.1</div></div>
-          </div>
-        </div>
-        <div className="sb-role">
-          <div className="sb-role-icon">📈</div>
-          <div><div className="sb-role-name">Terapeuta</div><div className="sb-role-sub">Acceso Limitado</div></div>
-        </div>
-        <nav className="sb-nav">
-          {[
-            {icon:'🏠', label:'Mi Panel',        href:'/terapeuta/dashboard',   active:false},
-            {icon:'👥', label:'Mis Pacientes',   href:'/terapeuta/pacientes',   active:false},
-            {icon:'📋', label:'Expedientes',      href:'/terapeuta/expedientes', active:false},
-            {icon:'📅', label:'Mi Agenda',        href:'/terapeuta/agenda',      active:false},
-            {icon:'📊', label:'Progreso',         href:'/terapeuta/progreso',    active:true},
-          ].map(n => (
-            <Link key={n.label} href={n.href} className={n.active?'active':''}>
-              <span className="sb-nav-icon">{n.icon}</span>{n.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="sb-bottom">
-          <Link href="/login"><span className="sb-nav-icon">→</span> Cerrar Sesión</Link>
-        </div>
-      </div>
+      <Sidebar
+        rol="terapeuta"
+        nombre="Terapeuta"
+        subRol="Acceso Limitado"
+        icono="📈"
+        items={[
+          {icon:'🏠', label:'Mi Panel',        href:'/terapeuta/dashboard',   active:false},
+          {icon:'👥', label:'Mis Pacientes',   href:'/terapeuta/pacientes',   active:false},
+          {icon:'📋', label:'Expedientes',      href:'/terapeuta/expedientes', active:false},
+          {icon:'📅', label:'Mi Agenda',        href:'/terapeuta/agenda',      active:false},
+          {icon:'📊', label:'Progreso',         href:'/terapeuta/progreso',    active:true},
+        ]}
+      />
 
       <div className="main">
         <div className="topbar">
-          <span className="topbar-title">
-            <Link href="/terapeuta/progreso">Progreso</Link> / {paciente.nombre_completo}
-          </span>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <MenuButton />
+            <span className="topbar-title">
+              <Link href="/terapeuta/progreso">Progreso</Link> / {paciente.nombre_completo}
+            </span>
+          </div>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/>En línea</div>
-            <div className="notif">🔔</div>
+            <TopbarActions userId={userId} rol="terapeuta" nombre={userNombre} />
           </div>
         </div>
 

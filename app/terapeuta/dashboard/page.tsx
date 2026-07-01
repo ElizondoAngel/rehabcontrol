@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 export default async function TerapeutaDashboard() {
   const supabase = await createClient()
@@ -133,27 +135,10 @@ export default async function TerapeutaDashboard() {
           --green:#34D399;--amber:#F5B400;--red:#F25555;
         }
         body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
-        .sidebar{width:248px;min-height:100vh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-        .sb-brand{padding:22px 20px 16px;border-bottom:1px solid var(--border)}
-        .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--mid),var(--light));display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:#fff}
-        .sb-name{font-size:13.5px;font-weight:600;color:var(--text)}
-        .sb-ver{font-size:10px;color:var(--muted)}
-        .sb-role{margin:14px 14px 6px;padding:11px 13px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:28px;height:28px;border-radius:7px;background:rgba(56,189,248,0.12);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
-        .sb-role-name{font-size:12.5px;font-weight:600;color:var(--text)}
-        .sb-role-sub{font-size:10.5px;color:var(--light)}
-        .sb-nav{flex:1;padding:6px 12px;margin-top:6px}
-        .sb-nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;color:var(--muted);text-decoration:none;transition:all .15s;margin-bottom:1px;font-weight:500}
-        .sb-nav a:hover{background:rgba(255,255,255,0.04);color:var(--text)}
-        .sb-nav a.active{background:rgba(37,99,235,0.14);color:var(--light)}
-        .sb-nav-icon{font-size:15px;width:18px;text-align:center}
-        .sb-bottom{padding:12px 12px;border-top:1px solid var(--border)}
-        .sb-bottom a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;color:var(--muted);text-decoration:none;transition:all .15s}
-        .sb-bottom a:hover{color:var(--red)}
 
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-        .topbar{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;padding:0 32px;flex-shrink:0}
+        .topbar{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px;flex-shrink:0}
+        .topbar-title{font-size:13px;color:var(--muted);font-weight:500}
         .topbar-right{display:flex;align-items:center;gap:16px}
         .online-dot{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--light)}
         .dot{width:6px;height:6px;border-radius:50%;background:var(--light)}
@@ -215,44 +200,29 @@ export default async function TerapeutaDashboard() {
         }
       `}</style>
 
-      <div className="sidebar">
-        <div className="sb-brand">
-          <div className="sb-logo-row">
-            <div className="sb-logo">RC</div>
-            <div><div className="sb-name">RehabControl</div><div className="sb-ver">v2.1</div></div>
-          </div>
-        </div>
-        <div className="sb-role">
-          <div className="sb-role-icon">📈</div>
-          <div><div className="sb-role-name">Terapeuta</div><div className="sb-role-sub">Acceso limitado</div></div>
-        </div>
-        <nav className="sb-nav">
-          <Link href="/terapeuta/dashboard" className="active">
-            <span className="sb-nav-icon">🏠</span>Mi Panel
-          </Link>
-          <Link href="/terapeuta/pacientes">
-            <span className="sb-nav-icon">👥</span>Mis Pacientes
-          </Link>
-          <Link href="/terapeuta/expedientes">
-            <span className="sb-nav-icon">📋</span>Expedientes
-          </Link>
-          <Link href="/terapeuta/agenda">
-            <span className="sb-nav-icon">📅</span>Mi Agenda
-          </Link>
-          <Link href="/terapeuta/progreso">
-            <span className="sb-nav-icon">📊</span>Progreso
-          </Link>
-        </nav>
-        <div className="sb-bottom">
-          <Link href="/login"><span className="sb-nav-icon">→</span> Cerrar sesión</Link>
-        </div>
-      </div>
+      <Sidebar
+        rol="terapeuta"
+        nombre="Terapeuta"
+        subRol="Acceso limitado"
+        icono="📈"
+        items={[
+          {icon:'🏠', label:'Mi Panel',        href:'/terapeuta/dashboard',   active:true},
+          {icon:'👥', label:'Mis Pacientes',   href:'/terapeuta/pacientes',   active:false},
+          {icon:'📋', label:'Expedientes',      href:'/terapeuta/expedientes', active:false},
+          {icon:'📅', label:'Mi Agenda',        href:'/terapeuta/agenda',      active:false},
+          {icon:'📊', label:'Progreso',         href:'/terapeuta/progreso',    active:false},
+        ]}
+      />
 
       <div className="main">
         <div className="topbar">
+          <div style={{display:'flex', alignItems:'center', gap:12}}>
+            <MenuButton />
+            <span className="topbar-title">Mi Panel</span>
+          </div>
           <div className="topbar-right">
             <div className="online-dot"><div className="dot"/> En línea</div>
-            <div className="notif">🔔</div>
+            <TopbarActions userId={user.id} rol={profile?.rol ?? 'terapeuta'} nombre={profile?.nombre_completo} />
           </div>
         </div>
 

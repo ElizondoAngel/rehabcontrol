@@ -58,6 +58,7 @@ export default async function ProgresoDetallePage({
       sesionesIniciales={sesiones ?? []}
       citasDisponibles={citasDisponibles}
       userNombre={profile?.nombre_completo ?? ''}
+      userId={user.id}
     />
   )
 }

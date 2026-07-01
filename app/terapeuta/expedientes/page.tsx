@@ -49,6 +49,7 @@ export default async function ExpedientesIndexPage() {
       pacientes={pacientes ?? []}
       expedientes={expedientes ?? []}
       userNombre={profile?.nombre_completo ?? ''}
+      userId={user.id}
     />
   )
 }

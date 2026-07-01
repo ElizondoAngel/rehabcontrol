@@ -52,6 +52,7 @@ export default async function ProgresoIndexPage() {
       pacientes={pacientes}
       sesiones={sesiones}
       userNombre={profile?.nombre_completo ?? ''}
+      userId={user.id}
     />
   )
 }

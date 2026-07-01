@@ -31,6 +31,7 @@ export default async function TerapeutaCitasPage() {
     <CitasClient
       citasIniciales={citas ?? []}
       userNombre={profile?.nombre_completo ?? ''}
+      userId={user.id}
     />
   )
 }
