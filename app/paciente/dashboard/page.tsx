@@ -68,6 +68,7 @@ export default async function PacienteDashboard() {
       ultimosPagos={pagos ?? []}
       progreso={progreso ?? []}
       contrato={contrato ?? null}
+      userId={user.id}
     />
   )
 }

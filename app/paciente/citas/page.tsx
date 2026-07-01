@@ -37,6 +37,7 @@ export default async function MisCitasPage() {
     <CitasClient
       profile={profile}
       citas={citas ?? []}
+      userId={user.id}
     />
   )
 }

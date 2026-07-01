@@ -37,6 +37,7 @@ export default async function MisPagosPage() {
     <PagosClient
       profile={profile}
       pagos={pagos ?? []}
+      userId={user.id}
     />
   )
 }

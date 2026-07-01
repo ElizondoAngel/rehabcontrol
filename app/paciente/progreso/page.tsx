@@ -46,6 +46,7 @@ export default async function MiProgresoPage() {
       profile={profile}
       progreso={progreso ?? []}
       contrato={contrato ?? null}
+      userId={user.id}
     />
   )
 }
