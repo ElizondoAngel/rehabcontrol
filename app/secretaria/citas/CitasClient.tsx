@@ -124,6 +124,8 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
   const [pacientesDisponibles, setPacientesDisponibles] = useState<PacienteOpt[]>(pacientes)
   const [menuAbierto, setMenuAbierto] = useState<Cita|null>(null)
   const [registrarPago, setRegistrarPago] = useState(false)
+  const [modalPagoCita, setModalPagoCita] = useState<Cita|null>(null)
+  const [erroresPago, setErroresPago] = useState<Record<string,string>>({})
 
 
 
@@ -254,6 +256,49 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
       setDia(toISODate(new Date(fecha_hora)))
     }
     cerrarModal()
+  }
+
+  // ── REGISTRAR PAGO DE UNA CITA EXISTENTE (que quedó "Sin registro") ──
+  async function registrarPagoCita(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!modalPagoCita) return
+    const fd = new FormData(e.currentTarget)
+    const campos = {
+      monto:       fd.get('monto') as string,
+      metodo_pago: fd.get('metodo_pago') as string,
+      estado_pago: fd.get('estado_pago') as string,
+    }
+    const errs: Record<string,string> = {}
+    if (!campos.monto || Number(campos.monto) <= 0) errs.monto = 'Indica un monto válido'
+    if (!campos.metodo_pago) errs.metodo_pago = 'Selecciona un método de pago'
+    if (Object.keys(errs).length > 0) { setErroresPago(errs); return }
+
+    setLoading(true)
+    const res = await fetch('/api/pagos', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        paciente_id: modalPagoCita.paciente_id,
+        cita_id:     modalPagoCita.id_cita,
+        monto:       Number(campos.monto),
+        metodo_pago: campos.metodo_pago,
+        estado_pago: campos.estado_pago || 'pendiente',
+      }),
+    })
+    const data = await res.json()
+    setLoading(false)
+
+    if (!res.ok) {
+      setToast({ msg: data.error ?? 'Error al registrar el pago', type: 'error' })
+      return
+    }
+
+    // Vincular el pago recién creado a la cita en el estado local,
+    // así deja de mostrar "— Sin registro —" sin necesidad de recargar.
+    setCitas(prev => prev.map(c => c.id_cita === modalPagoCita.id_cita ? { ...c, pagos: [data.pago] } : c))
+    setToast({ msg: 'Pago registrado correctamente', type: 'success' })
+    setModalPagoCita(null)
+    setErroresPago({})
   }
 
   // ── CAMBIAR ESTADO (cancelar / completar / no asistió) ─────────
@@ -705,6 +750,11 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
               <button className="action-item" onClick={() => { abrirModalEdicion(menuAbierto); setMenuAbierto(null) }}>
                 <span className="action-icon">✏️</span> Editar cita
               </button>
+              {(!menuAbierto.pagos || menuAbierto.pagos.length === 0) && (
+                <button className="action-item" onClick={() => { setModalPagoCita(menuAbierto); setErroresPago({}); setMenuAbierto(null) }}>
+                  <span className="action-icon">💳</span> Registrar pago
+                </button>
+              )}
               <button className="action-item" onClick={() => cambiarEstadoCita(menuAbierto, 'completada')}>
                 <span className="action-icon">✅</span> Marcar como completada
               </button>
@@ -732,6 +782,60 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
               <button className="btn-cancel" onClick={() => setConfirmCancelar(null)}>Volver</button>
               <button className="btn-danger" onClick={() => cambiarEstadoCita(confirmCancelar, 'cancelada')}>Cancelar cita</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REGISTRAR PAGO DE UNA CITA SIN PAGO */}
+      {modalPagoCita && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) { setModalPagoCita(null); setErroresPago({}) } }}>
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">Registrar pago</div>
+                <div className="modal-sub">
+                  {modalPagoCita.pacientes?.nombre_completo} · {formatHora(modalPagoCita.fecha_hora)}
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => { setModalPagoCita(null); setErroresPago({}) }}>✕</button>
+            </div>
+            <form onSubmit={registrarPagoCita} noValidate>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label className="form-label">Monto *</label>
+                    <input name="monto" type="number" min="0" step="0.01"
+                      className={`form-input${erroresPago.monto?' err':''}`} placeholder="$0.00" />
+                    {erroresPago.monto && <span className="err-msg">{erroresPago.monto}</span>}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Método de pago *</label>
+                    <select name="metodo_pago" className={`form-select${erroresPago.metodo_pago?' err':''}`} defaultValue="">
+                      <option value="">— Selecciona —</option>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="aseguradora">Aseguradora</option>
+                    </select>
+                    {erroresPago.metodo_pago && <span className="err-msg">{erroresPago.metodo_pago}</span>}
+                  </div>
+                  <div className="form-group form-grid-full">
+                    <label className="form-label">Estado del pago</label>
+                    <select name="estado_pago" className="form-select" defaultValue="pagado">
+                      <option value="pagado">Pagado ahora</option>
+                      <option value="pendiente">Pendiente — cobrar después</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={() => { setModalPagoCita(null); setErroresPago({}) }}>Cancelar</button>
+                <button type="submit" className="btn-save" disabled={loading}>
+                  {loading && <div style={{width:14,height:14,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',animation:'spin .7s linear infinite'}}/>}
+                  Registrar pago
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
