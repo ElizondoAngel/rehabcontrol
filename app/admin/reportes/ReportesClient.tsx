@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 
 interface Resumen {
@@ -34,6 +35,9 @@ interface Props {
   pacientesPorTerapeuta: TerapeutaData[]
   citasPorEstado: Record<string,number>
   ultimosPagos: Pago[]
+  userId: string
+  rol: string
+  nombre?: string
 }
 
 // ── GRÁFICA BARRAS ───────────────────────────────────────────
@@ -96,7 +100,7 @@ function Dona({ data }: { data: Record<string,number> }) {
   )
 }
 
-export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerapeuta, citasPorEstado, ultimosPagos }: Props) {
+export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerapeuta, citasPorEstado, ultimosPagos, userId, rol, nombre }: Props) {
   const [exportando, setExportando] = useState(false)
 
   const tasaAsist = resumen.total_citas
@@ -243,7 +247,10 @@ export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerap
             <MenuButton />
             <span className="topbar-title">Reportes</span>
           </div>
-          <div className="online-dot"><div className="dot"/>En línea</div>
+          <div style={{display:'flex', alignItems:'center', gap:16}}>
+            <div className="online-dot"><div className="dot"/>En línea</div>
+            <TopbarActions userId={userId} rol={rol} nombre={nombre} />
+          </div>
         </div>
 
         <div className="content">

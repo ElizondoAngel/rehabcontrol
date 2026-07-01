@@ -18,6 +18,7 @@
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 
 interface AdminProfile {
@@ -27,7 +28,7 @@ interface Stats {
   totalPacientes?: number | null; totalCitas?: number | null
   totalPagos?: number | null; totalLogs?: number | null
 }
-interface Props { adminProfile: AdminProfile; stats: Stats }
+interface Props { adminProfile: AdminProfile; stats: Stats; userId: string }
 
 // ── TOAST ────────────────────────────────────────────────────
 function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onClose:()=>void }) {
@@ -108,7 +109,7 @@ function CampoEditable({ label, name, defaultValue, tipo='text', placeholder }:
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function ConfiguracionClient({ adminProfile, stats }: Props) {
+export default function ConfiguracionClient({ adminProfile, stats, userId }: Props) {
   const [loading, setLoading] = useState(false)
   const [loadingRespaldo, setLoadingRespaldo] = useState<'json'|'excel'|null>(null)
   const [toast, setToast] = useState<{msg:string;type:'success'|'error'}|null>(null)
@@ -323,7 +324,10 @@ export default function ConfiguracionClient({ adminProfile, stats }: Props) {
             <MenuButton />
             <span className="topbar-title">Configuración</span>
           </div>
-          <div className="online-dot"><div className="dot"/>En línea</div>
+          <div style={{display:'flex', alignItems:'center', gap:16}}>
+            <div className="online-dot"><div className="dot"/>En línea</div>
+            <TopbarActions userId={userId} rol={adminProfile.rol ?? 'admin'} nombre={adminProfile.nombre_completo} />
+          </div>
         </div>
 
         <div className="content">

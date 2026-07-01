@@ -28,6 +28,7 @@ export default async function ConfiguracionPage() {
     <ConfiguracionClient
       adminProfile={profile ?? {}}
       stats={{ totalPacientes, totalCitas, totalPagos, totalLogs }}
+      userId={user.id}
     />
   )
 }
