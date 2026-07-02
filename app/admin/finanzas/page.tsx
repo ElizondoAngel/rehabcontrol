@@ -8,7 +8,7 @@ export default async function FinanzasPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles').select('rol').eq('id', user.id).single()
+    .from('profiles').select('rol, nombre_completo').eq('id', user.id).single()
   if (!['admin'].includes(profile?.rol ?? '')) redirect('/unauthorized')
 
   // ── Métricas generales ────────────────────────────────────
@@ -75,7 +75,9 @@ export default async function FinanzasPage() {
       ingresosPorMes={ingresosPorMes ?? []}
       paquetes={paquetes ?? []}
       contratos={normalizedContratos}
+      userId={user.id}
+      rol={profile?.rol ?? ''}
+      nombre={profile?.nombre_completo ?? ''}
     />
   )
 }
-

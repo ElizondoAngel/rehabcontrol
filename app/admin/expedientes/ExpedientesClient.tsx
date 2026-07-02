@@ -9,6 +9,7 @@
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Cita { id_cita: number; estado: string }
@@ -54,7 +55,12 @@ interface Paciente {
   citas?: Cita[]
   pagos?: Pago[]
 }
-interface Props { pacientesIniciales: Paciente[]; currentUserRol: string }
+interface Props {
+  pacientesIniciales: Paciente[]
+  currentUserRol: string
+  userId: string
+  nombre?: string
+}
 
 // ── TOAST ────────────────────────────────────────────────────
 function Toast({ msg, type, onClose }: { msg: string; type: 'success'|'error'; onClose: ()=>void }) {
@@ -88,7 +94,7 @@ const ESTADO_BADGE: Record<string,string> = { activo:'b-green', alta:'b-blue', s
 const ESTADO_LABEL: Record<string,string> = { activo:'Activo', alta:'De alta', suspendido:'Suspendido' }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function ExpedientesClient({ pacientesIniciales, currentUserRol }: Props) {
+export default function ExpedientesClient({ pacientesIniciales, currentUserRol, userId, nombre }: Props) {
   const [pacientes, setPacientes] = useState<Paciente[]>(pacientesIniciales)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
@@ -303,7 +309,10 @@ export default function ExpedientesClient({ pacientesIniciales, currentUserRol }
             <MenuButton />
             <span className="topbar-title">Expedientes</span>
           </div>
-          <div className="online-dot"><div className="dot"/>En línea</div>
+          <div style={{display:'flex', alignItems:'center', gap:16}}>
+            <div className="online-dot"><div className="dot"/>En línea</div>
+            <TopbarActions userId={userId} rol={currentUserRol} nombre={nombre} />
+          </div>
         </div>
         <div className="content">
           <div className="page-title">Expedientes clínicos</div>

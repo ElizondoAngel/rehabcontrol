@@ -9,6 +9,7 @@
 import Link from 'next/link'
 import { useState, useMemo, useEffect } from 'react'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
+import TopbarActions from '@/app/components/TopbarActions'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Pago {
@@ -34,6 +35,7 @@ interface Props {
   pagosMes: any[]; pagosAnterior: any[]
   todosLosPagos: Pago[]; ingresosPorMes: IngresoMes[]
   paquetes: Paquete[]; contratos: Contrato[]
+  userId: string; rol: string; nombre?: string
 }
 
 // ── TOAST ────────────────────────────────────────────────────
@@ -58,7 +60,11 @@ function Toast({ msg, type, onClose }: { msg:string; type:'success'|'error'; onC
 
 // ── GRÁFICA DE BARRAS ────────────────────────────────────────
 function GraficaBarras({ data }: { data: IngresoMes[] }) {
-  const max = Math.max(...data.map(d => Number(d.ingresos)), 1)
+  // Antes 'max' solo consideraba 'ingresos', así que si 'pendientes' era
+  // mayor (como cuando hay pocos pagos cobrados pero muchos pendientes),
+  // la barra de pendiente calculaba una altura de cientos de % y se
+  // desbordaba del contenedor, tapando las tarjetas de arriba.
+  const max = Math.max(...data.map(d => Math.max(Number(d.ingresos), Number(d.pendientes))), 1)
   const reversed = [...data].reverse()
   return (
     <div style={{display:'flex',alignItems:'flex-end',gap:8,height:120,padding:'0 4px'}}>
@@ -96,7 +102,7 @@ function GraficaBarras({ data }: { data: IngresoMes[] }) {
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos, ingresosPorMes, paquetes, contratos }: Props) {
+export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos, ingresosPorMes, paquetes, contratos, userId, rol, nombre }: Props) {
   const [tabActiva, setTabActiva] = useState<'resumen'|'pagos'|'contratos'|'paquetes'>('resumen')
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
@@ -341,7 +347,10 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
             <MenuButton />
             <span className="topbar-title">Finanzas</span>
           </div>
-          <div className="online-dot"><div className="dot"/>En línea</div>
+          <div style={{display:'flex', alignItems:'center', gap:16}}>
+            <div className="online-dot"><div className="dot"/>En línea</div>
+            <TopbarActions userId={userId} rol={rol} nombre={nombre} />
+          </div>
         </div>
 
         <div className="content">
@@ -691,4 +700,3 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
     </>
   )
 }
-
