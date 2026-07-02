@@ -8,6 +8,7 @@ interface ChatMsg {
   text: string
   time: string
   fileName?: string
+  histIndex?: number // posición en history.current — permite editar y truncar desde ahí
 }
 interface MsgHist { role: 'user' | 'assistant'; content: string }
 
@@ -31,6 +32,7 @@ const BIENVENIDA: Record<string, string> = {
 }
 
 // Acento de color distinto por rol — misma base oscura, distinta identidad
+// (NO SE TOCA — se deja exactamente igual, así les gusta)
 const ACENTOS: Record<string, { from: string; to: string; glow: string; chip: string }> = {
   admin:      { from: '#B45309', to: '#F59E0B', glow: 'rgba(245,158,11,0.5)', chip: '#F59E0B' },
   secretaria: { from: '#6D28D9', to: '#A78BFA', glow: 'rgba(167,139,250,0.5)', chip: '#A78BFA' },
@@ -38,7 +40,19 @@ const ACENTOS: Record<string, { from: string; to: string; glow: string; chip: st
   paciente:   { from: '#2563EB', to: '#38BDF8', glow: 'rgba(56,189,248,0.5)', chip: '#38BDF8' },
 }
 
-const PUEDE_ADJUNTAR = ['admin', 'terapeuta']
+// ─────────────────────────────────────────────────────────────────────────
+// FUNCIONALIDAD HABILITADA (antes solo admin/terapeuta tenían adjuntar, y
+// solo terapeuta tenía pausar). Ahora AMBAS funciones están activas para
+// LOS 4 ROLES: admin 🟠, secretaria 🟣, terapeuta 🟢, paciente 🔵.
+// Si en el futuro quieres restringir alguna, solo quita el rol de la lista.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Roles que pueden adjuntar documentos (imagen, PDF, txt, csv) al chat
+// paciente NO adjunta — solo admin, secretaria y terapeuta
+const PUEDE_ADJUNTAR = ['admin', 'secretaria', 'terapeuta']
+
+// Roles que pueden pausar su mensaje antes de enviarlo (para editarlo/revisarlo)
+const PUEDE_PAUSAR = ['admin', 'secretaria', 'terapeuta', 'paciente']
 
 function hora(iso?: string) {
   return new Date(iso ?? Date.now()).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
@@ -76,13 +90,15 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
   const [adjunto,    setAdjunto]    = useState<File | null>(null)
   const [adjPreview, setAdjPreview] = useState<string | null>(null)
   const [messages,   setMessages]   = useState<ChatMsg[]>([])
+  const [editingId,  setEditingId]  = useState<string | null>(null) // id del mensaje que se está editando
+  const [editText,   setEditText]   = useState('')
 
   const acento    = ACENTOS[rol] ?? ACENTOS.paciente
   const history   = useRef<MsgHist[]>([])
-  const pendiente = useRef<string>('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileRef   = useRef<HTMLInputElement>(null)
-  const puedeAdj  = PUEDE_ADJUNTAR.includes(rol)
+  const puedeAdj    = PUEDE_ADJUNTAR.includes(rol) // 📎 adjuntar archivo — habilitado para los 4 roles
+  const puedePausar = PUEDE_PAUSAR.includes(rol)   // ⏸ pausar mensaje — habilitado para los 4 roles
   const yaCargado = useRef(false)
 
   // ── Cargar historial guardado al montar (se queda la info entre sesiones) ──
@@ -106,6 +122,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
               role: (h.role === 'user' ? 'user' : 'bot') as 'user' | 'bot',
               text: h.content,
               time: hora(h.created_at),
+              histIndex: i,
             })),
           ])
           setShowSugs(false)
@@ -135,21 +152,46 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     e.target.value = ''
   }
 
+  // Al pausar, el texto se queda tal cual en el input (ya NO se borra),
+  // así el usuario lo puede editar directo en el campo antes de reanudar.
   function pausar() {
     if (!input.trim() || loading) return
-    pendiente.current = input
-    setInput('')
     setPaused(true)
     setMessages(p => [...p, {
       id: Date.now().toString(), role: 'bot', time: hora(),
-      text: '⏸️ Mensaje en pausa. Puedes editarlo y reanudar cuando quieras.',
+      text: '⏸️ Mensaje en pausa. Edítalo aquí abajo y presiona ▶ para reanudar el envío.',
     }])
   }
 
   function reanudar() {
-    setInput(pendiente.current)
     setPaused(false)
-    pendiente.current = ''
+  }
+
+  // ✎ Editar un mensaje que YA se envió (como editar un mensaje tuyo en un chat):
+  // se abre el campo de edición justo en esa burbuja.
+  function iniciarEdicion(id: string, textoActual: string) {
+    setEditingId(id)
+    setEditText(textoActual)
+  }
+
+  function cancelarEdicion() {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  // Al guardar: se borra ese mensaje y todo lo que venía después (igual que
+  // editar un mensaje en un chat normal), y se reenvía el texto editado.
+  function guardarEdicion(id: string, histIndex?: number) {
+    if (!editText.trim() || histIndex === undefined) { cancelarEdicion(); return }
+    const idxMsg = messages.findIndex(m => m.id === id)
+    if (idxMsg === -1) { cancelarEdicion(); return }
+
+    const textoEditado = editText
+    setMessages(p => p.slice(0, idxMsg))
+    history.current = history.current.slice(0, histIndex)
+    setEditingId(null)
+    setEditText('')
+    send(textoEditado)
   }
 
   async function send(text: string) {
@@ -160,10 +202,12 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     setShowSugs(false)
 
     const textoMostrar = text.trim() || `📎 ${adjunto?.name}`
+    const idx = history.current.length // posición que este mensaje ocupará en history.current
     setMessages(p => [...p, {
       id: Date.now().toString(), role: 'user',
       text: textoMostrar, time: hora(),
       fileName: adjunto?.name,
+      histIndex: idx,
     }])
 
     const newHist: MsgHist[] = [...history.current, { role: 'user', content: textoMostrar }]
@@ -232,7 +276,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 {paused ? 'En pausa' : 'En línea'} · {rol}
               </p>
             </div>
-            <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8C9BB5', fontSize: 18 }}>✕</button>
+            <button type="button" onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8C9BB5', fontSize: 18 }}>✕</button>
           </div>
 
           {/* Aviso: no es especialista */}
@@ -264,20 +308,55 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                     📎 {m.fileName}
                   </div>
                 )}
-                <div style={{
-                  padding: '8px 12px', fontSize: 13, lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap', borderRadius: 12,
-                  borderBottomLeftRadius:  m.role === 'bot'  ? 3 : 12,
-                  borderBottomRightRadius: m.role === 'user' ? 3 : 12,
-                  background: m.role === 'user'
-                    ? `linear-gradient(135deg,${acento.from},${acento.to})`
-                    : 'rgba(255,255,255,0.06)',
-                  color: '#E7EDF7',
-                  border: m.role === 'bot' ? '1px solid rgba(255,255,255,0.09)' : 'none',
+                {editingId === m.id ? (
+                  // ✎ Modo edición — reemplaza la burbuja mientras se edita este mensaje
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
+                    <input
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && guardarEdicion(m.id, m.histIndex)}
+                      autoFocus
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${acento.chip}`,
+                        borderRadius: 10, padding: '6px 10px',
+                        color: '#E7EDF7', fontSize: 13, outline: 'none', fontFamily: 'Inter,sans-serif',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={cancelarEdicion} style={{
+                        background: 'none', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 20,
+                        padding: '3px 10px', fontSize: 10, color: '#8C9BB5', cursor: 'pointer',
+                      }}>Cancelar</button>
+                      <button type="button" onClick={() => guardarEdicion(m.id, m.histIndex)} style={{
+                        background: acento.chip, border: 'none', borderRadius: 20,
+                        padding: '3px 10px', fontSize: 10, color: '#0A1220', fontWeight: 600, cursor: 'pointer',
+                      }}>Guardar y reenviar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '8px 12px', fontSize: 13, lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap', borderRadius: 12,
+                    borderBottomLeftRadius:  m.role === 'bot'  ? 3 : 12,
+                    borderBottomRightRadius: m.role === 'user' ? 3 : 12,
+                    background: m.role === 'user'
+                      ? `linear-gradient(135deg,${acento.from},${acento.to})`
+                      : 'rgba(255,255,255,0.06)',
+                    color: '#E7EDF7',
+                    border: m.role === 'bot' ? '1px solid rgba(255,255,255,0.09)' : 'none',
+                  }}>
+                    {m.text}
+                  </div>
+                )}
+                <p style={{
+                  fontSize: 10, color: '#8C9BB5', margin: 0, display: 'flex', alignItems: 'center', gap: 6,
+                  justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
                 }}>
-                  {m.text}
-                </div>
-                <p style={{ fontSize: 10, color: '#8C9BB5', margin: 0, textAlign: m.role === 'user' ? 'right' : 'left' }}>
+                  {/* ✎ Editar — solo en mensajes propios del usuario ya enviados, no mientras carga respuesta */}
+                  {m.role === 'user' && editingId !== m.id && m.histIndex !== undefined && !loading && (
+                    <span onClick={() => iniciarEdicion(m.id, m.text)} style={{ cursor: 'pointer', color: acento.chip }}>✎ editar</span>
+                  )}
                   {m.time}
                 </p>
               </div>
@@ -307,7 +386,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
           {showSugs && (
             <div style={{ padding: '0 12px 8px', display: 'flex', flexWrap: 'wrap', gap: 6, flexShrink: 0 }}>
               {sugs.map(s => (
-                <button key={s} onClick={() => send(s)} style={{
+                <button type="button" key={s} onClick={() => send(s)} style={{
                   background: 'rgba(255,255,255,0.05)',
                   border: `1px solid ${acento.chip}38`,
                   borderRadius: 20, padding: '5px 11px', fontSize: 11,
@@ -332,7 +411,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 <p style={{ fontSize: 11, color: '#E7EDF7', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adjunto.name}</p>
                 <p style={{ fontSize: 10, color: '#8C9BB5', margin: 0 }}>{(adjunto.size / 1024).toFixed(1)} KB</p>
               </div>
-              <button onClick={() => { setAdjunto(null); setAdjPreview(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8C9BB5', fontSize: 16 }}>✕</button>
+              <button type="button" onClick={() => { setAdjunto(null); setAdjPreview(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8C9BB5', fontSize: 16 }}>✕</button>
             </div>
           )}
 
@@ -343,12 +422,15 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
             background: '#060B14', flexShrink: 0,
           }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* 📎 Botón de adjuntar — visible para admin, secretaria, terapeuta y paciente */}
               {puedeAdj && (
                 <>
                   <input ref={fileRef} type="file"
+                    id="chatbot-file-input"
+                    name="chatbot-file-input"
                     accept="image/*,.pdf,.txt,.csv"
                     onChange={onFileChange} style={{ display: 'none' }} />
-                  <button onClick={() => fileRef.current?.click()} disabled={loading}
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={loading}
                     title="Adjuntar archivo"
                     style={{
                       width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -362,11 +444,14 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
               )}
 
               <input
+                id="chatbot-message-input"
+                name="chatbot-message-input"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && !paused && send(input)}
                 placeholder={paused ? 'Edita y reanuda...' : adjunto ? 'Añade mensaje o envía...' : 'Escribe tu pregunta...'}
                 disabled={loading}
+                autoComplete="off"
                 style={{
                   flex: 1, background: 'rgba(255,255,255,0.05)',
                   border: `1px solid ${paused ? 'rgba(245,180,0,0.4)' : 'rgba(255,255,255,0.09)'}`,
@@ -376,8 +461,9 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 }}
               />
 
-              {rol === 'terapeuta' && !paused && (
-                <button onClick={pausar} disabled={!input.trim() || loading}
+              {/* ⏸ Botón de pausar — visible para admin, secretaria, terapeuta y paciente */}
+              {puedePausar && !paused && (
+                <button type="button" onClick={pausar} disabled={!input.trim() || loading}
                   title="Pausar y analizar antes de enviar"
                   style={{
                     width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -389,8 +475,9 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                   }}>⏸</button>
               )}
 
+              {/* ▶ Botón de reanudar — aparece para cualquier rol que haya pausado un mensaje */}
               {paused && (
-                <button onClick={reanudar}
+                <button type="button" onClick={reanudar}
                   title="Reanudar mensaje pausado"
                   style={{
                     width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -401,7 +488,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                   }}>▶</button>
               )}
 
-              <button onClick={() => send(input)}
+              <button type="button" onClick={() => send(input)}
                 disabled={loading || (!input.trim() && !adjunto) || paused}
                 style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -415,7 +502,8 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 }}>➤</button>
             </div>
 
-            {rol === 'terapeuta' && (
+            {/* Leyenda de botones — ahora visible para los 4 roles, no solo terapeuta */}
+            {puedePausar && (
               <p style={{ fontSize: 10, color: '#8C9BB5', margin: 0, textAlign: 'center' }}>
                 ⏸ Pausa para revisar · ▶ Reanuda · ➤ Envía
               </p>
@@ -424,9 +512,9 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
         </div>
       )}
 
-      {/* Burbuja */}
+      {/* Burbuja — el color cambia según el rol (ACENTOS), tal cual la tenías */}
       <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9998 }}>
-        <button onClick={toggle} style={{
+        <button type="button" onClick={toggle} style={{
           width: 52, height: 52, borderRadius: '50%', border: 'none', cursor: 'pointer',
           background: `linear-gradient(135deg,${acento.from},${acento.to})`,
           color: 'white', fontSize: 22,

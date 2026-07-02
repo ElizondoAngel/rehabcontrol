@@ -133,6 +133,7 @@ export default function PagosClient({ profile, pagos, userId }: any) {
         items={[
           { icon:'🏠', label:'Mi Inicio',   href:'/paciente/dashboard', active:false },
           { icon:'📅', label:'Mis Citas',   href:'/paciente/citas',     active:false },
+          { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon:'📈', label:'Mi Progreso', href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',   href:'/paciente/pagos',     active:true  },
           { icon:'⚙️', label:'Mis Datos',   href:'/paciente/perfil',    active:false },

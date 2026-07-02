@@ -126,6 +126,7 @@ function NavConMenu() {
     {href:'#galeria',       label:'Galería'},
     {href:'#proceso',       label:'Cómo funciona'},
     {href:'#contacto',      label:'Contacto'},
+    
   ]
   return (
     <>

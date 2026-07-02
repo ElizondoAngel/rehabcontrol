@@ -1,6 +1,7 @@
 /**
  * app/api/chatbot/route.ts
  * RehabControl AI v5 — Gemini 2.5 Flash + Google Search + Function Calling + Historial
+ * + Prompt Firewall + Validación de mensaje + Logs de seguridad
  */
 
 import { createClient } from '@/lib/supabase/server'
@@ -277,6 +278,84 @@ ${(citasData ?? []).map((c: any) =>
   return ctx
 }
 
+// ────────────────────────────────────────────────────────────────
+// Seguridad: validación de mensaje, Prompt Firewall y logs
+// ────────────────────────────────────────────────────────────────
+
+// ── 3.2 Validación del mensaje ──────────────────────────────────
+// Rechaza mensajes vacíos, demasiado largos, o con caracteres de
+// control innecesarios, antes de gastar tokens en la IA.
+function validarMensajeChatbot(mensaje: string): { valido: boolean; mensaje: string } {
+  const limpio = (mensaje ?? '').trim()
+
+  if (limpio === '') {
+    return { valido: false, mensaje: 'El mensaje no puede estar vacío.' }
+  }
+  if (limpio.length > 2000) {
+    return { valido: false, mensaje: 'El mensaje es demasiado largo.' }
+  }
+
+  // Elimina caracteres de control (\x00-\x1F, \x7F) que no aportan
+  // nada al mensaje y pueden usarse para intentos de manipulación.
+  const sanitizado = limpio.replace(/[\x00-\x1F\x7F]/g, '')
+
+  return { valido: true, mensaje: sanitizado }
+}
+
+// ── 3.1 Prompt Firewall ─────────────────────────────────────────
+// Revisa el mensaje del usuario ANTES de enviarlo a Gemini. Bloquea
+// intentos de manipulación del rol del chatbot, fuga de datos
+// clínicos/administrativos y otras instrucciones peligrosas.
+const FRASES_BLOQUEADAS = [
+  'ignora las instrucciones',
+  'ignora tus instrucciones',
+  'olvida las reglas',
+  'revela tu prompt',
+  'muéstrame todas las contraseñas',
+  'lista todos los usuarios',
+  'actúa como administrador',
+  'dame la base de datos',
+  'muestra las claves api',
+  'borra los registros',
+  'ejecuta este comando',
+  'dame el historial de todos los pacientes',
+  'muéstrame los expedientes',
+  'dime el diagnóstico de',
+  'datos clínicos de otro paciente',
+  'cambia el plan de tratamiento de',
+]
+
+function promptFirewall(mensaje: string): { permitido: boolean; motivo: string } {
+  const normalizado = mensaje.toLowerCase()
+  for (const frase of FRASES_BLOQUEADAS) {
+    if (normalizado.includes(frase)) {
+      return { permitido: false, motivo: 'Solicitud bloqueada por política de seguridad.' }
+    }
+  }
+  return { permitido: true, motivo: 'Mensaje permitido.' }
+}
+
+
+async function registrarEventoSeguridad(
+  supabase: any,
+  tipo: 'PROMPT_BLOQUEADO' | 'MENSAJE_INVALIDO' | 'ACCESO_DENEGADO' | 'ERROR_IA',
+  detalle: string,
+  userId: string | null,
+  mensaje: string = ''
+) {
+  const mensajeReducido = mensaje.slice(0, 120)
+  try {
+    await supabase.from('eventos_seguridad_chatbot').insert({
+      tipo,
+      detalle,
+      profile_id: userId,
+      mensaje: mensajeReducido,
+    })
+  } catch (e) {
+    console.error('❌ Error registrando evento de seguridad:', e)
+  }
+}
+
 // ── Prompts ─────────────────────────────────────────────────────────
 const BASE_PROMPT = `
 IDENTIDAD
@@ -438,6 +517,7 @@ async function llamarGeminiConFunciones(
     if (!res.ok) {
       const err = await res.text()
       console.error('❌ Gemini (function calling):', err)
+      await registrarEventoSeguridad(supabase, 'ERROR_IA', err.slice(0, 200), userId)
       return 'Tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.'
     }
 
@@ -510,7 +590,10 @@ export async function GET() {
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError) console.error('❌ GET auth error:', authError.message)
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    if (!user) {
+      await registrarEventoSeguridad(supabase, 'ACCESO_DENEGADO', 'GET historial sin sesión', null)
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
 
     const { data, error } = await supabase
       .from('chatbot_historial')
@@ -535,7 +618,10 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    if (!user) {
+      await registrarEventoSeguridad(supabase, 'ACCESO_DENEGADO', 'POST chatbot sin sesión', null)
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
 
     const { data: profile } = await supabase.from('profiles').select('rol').eq('id', user.id).single()
     const rol = profile?.rol ?? 'paciente'
@@ -556,6 +642,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Mensajes requeridos' }, { status: 400 })
     }
 
+    const ultimoTextoOriginal = mensajes[mensajes.length - 1]?.content ?? ''
+
+    // ── 3.2 Validación del mensaje ──────────────────────────────
+    // Solo se exige mensaje no vacío/no larguísimo cuando no viene
+    // acompañado de un archivo (un archivo puede enviarse sin texto).
+    if (!body.file) {
+      const validacion = validarMensajeChatbot(ultimoTextoOriginal)
+      if (!validacion.valido) {
+        await registrarEventoSeguridad(supabase, 'MENSAJE_INVALIDO', validacion.mensaje, user.id, ultimoTextoOriginal)
+        return NextResponse.json({ error: validacion.mensaje }, { status: 400 })
+      }
+    }
+
+    // ── 3.1 Prompt Firewall ─────────────────────────────────────
+    // Se revisa el texto ANTES de construir el contexto o llamar a Gemini.
+    const revisionFirewall = promptFirewall(ultimoTextoOriginal)
+    if (!revisionFirewall.permitido) {
+      await registrarEventoSeguridad(supabase, 'PROMPT_BLOQUEADO', revisionFirewall.motivo, user.id, ultimoTextoOriginal)
+      const respuestaBloqueo = 'Tu solicitud no puede procesarse por políticas de seguridad.'
+      try {
+        await supabase.from('chatbot_historial').insert([
+          { profile_id: user.id, role: 'user', content: ultimoTextoOriginal, modulo: body.modulo ?? null },
+          { profile_id: user.id, role: 'assistant', content: respuestaBloqueo, modulo: body.modulo ?? null },
+        ])
+      } catch (e) {
+        console.error('Error guardando historial (bloqueo):', e)
+      }
+      return NextResponse.json({ reply: respuestaBloqueo, rol }, { status: 200 })
+    }
+
     const GEMINI_KEY = process.env.GEMINI_API_KEY
     if (!GEMINI_KEY) return NextResponse.json({ error: 'Configuración incompleta' }, { status: 500 })
 
@@ -570,7 +686,7 @@ ${contexto ? `\nCONTEXTO EN TIEMPO REAL:\n${contexto}` : ''}`
       parts: [{ text: m.content }],
     }))
 
-    const ultimoTexto = mensajes[mensajes.length - 1]?.content ?? ''
+    const ultimoTexto = ultimoTextoOriginal
     const lastParts: GeminiPart[] = []
 
     if (body.file?.base64 && body.file?.mimeType) {
