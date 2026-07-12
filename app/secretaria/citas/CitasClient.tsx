@@ -48,7 +48,12 @@ interface Props {
 }
 
 // ── HELPERS DE FECHA ──────────────────────────────────────────
-function toISODate(d: Date) { return d.toISOString().split('T')[0] }
+function toISODate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dia}`
+}
 function formatHora(iso: string) {
   return new Date(iso).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12:false })
 }
@@ -261,7 +266,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
 
     setLoading(true)
 
-    const fecha_hora = `${campos.fecha}T${campos.hora}:00`
+    const fecha_hora = new Date(`${campos.fecha}T${campos.hora}:00`).toISOString()
     const payload = {
       paciente_id:  Number(campos.paciente_id),
       terapeuta_id: campos.terapeuta_id,
@@ -532,9 +537,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
                 { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
                 { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:true },
                 { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:false },
-                { icon:'📄', label:'Contratos',      href:'/secretaria/contratos', active:false },
                 { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false },
-                { icon:'🕘', label:'Disponibilidad', href:'/secretaria/disponibilidad', active:false },
               ]}
       />
 
