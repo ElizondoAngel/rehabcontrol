@@ -340,6 +340,8 @@ export default function UsuariosClient({ usuariosIniciales, currentUserId, pacie
           {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
           {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},
           {icon:'📊', label:'Reportes',             href:'/admin/reportes',         active:false},
+          {icon:'🕘', label:'Disponibilidad',       href:'/admin/disponibilidad',   active:false},
+          {icon:'⭐', label:'Opiniones',            href:'/admin/opiniones',        active:false},
           {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
           {icon:'🔍', label:'Logs de Auditoría',   href:'/admin/logs',             active:false},
           {icon:'⚙️', label:'Configuración',        href:'/admin/configuracion',    active:false},

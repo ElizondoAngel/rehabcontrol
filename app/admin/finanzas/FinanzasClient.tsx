@@ -23,7 +23,7 @@ interface Pago {
   registrado_por?: { nombre_completo: string } | null
 }
 interface IngresoMes { mes: string; ingresos: number; pendientes: number; reembolsos: number; total_transacciones: number }
-interface Paquete { id_paquete: number; nombre: string; tipo: string; num_sesiones: number; precio_total: number; precio_por_sesion: number }
+interface Paquete { id_paquete: number; nombre: string; tipo: string; num_sesiones: number; precio_total: number; precio_por_sesion: number; duracion_sesion_min?: number }
 interface Contrato {
   id_contrato_paciente: number
   sesiones_totales: number; sesiones_usadas: number; sesiones_restantes: number
@@ -104,6 +104,16 @@ function GraficaBarras({ data }: { data: IngresoMes[] }) {
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
 export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos, ingresosPorMes, paquetes, contratos, userId, rol, nombre }: Props) {
   const [tabActiva, setTabActiva] = useState<'resumen'|'pagos'|'contratos'|'paquetes'>('resumen')
+  const [listaContratos, setListaContratos] = useState<Contrato[]>(contratos)
+  const [modalContrato, setModalContrato] = useState(false)
+  const [pacientesActivos, setPacientesActivos] = useState<{id_paciente:number; nombre_completo:string}[]>([])
+  const [erroresContrato, setErroresContrato] = useState<Record<string,string>>({})
+  const [loadingContrato, setLoadingContrato] = useState(false)
+  const [paqueteSeleccionado, setPaqueteSeleccionado] = useState<Paquete | null>(null)
+  const [incluirPagoInicial, setIncluirPagoInicial] = useState(true)
+  const [modalAbonar, setModalAbonar] = useState<Contrato | null>(null)
+  const [erroresAbono, setErroresAbono] = useState<Record<string,string>>({})
+  const [loadingAbono, setLoadingAbono] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [filtroMetodo, setFiltroMetodo] = useState('todos')
@@ -129,16 +139,19 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
     const tipo = fd.get('tipo') as string
     const num_sesiones = fd.get('num_sesiones') as string
     const precio_total = fd.get('precio_total') as string
+    const duracion_sesion_min = fd.get('duracion_sesion_min') as string
 
     const errs: Record<string,string> = {}
     if (!nombre?.trim()) errs.nombre = 'El nombre es obligatorio'
     if (!num_sesiones || Number(num_sesiones) < 1) errs.num_sesiones = 'Mínimo 1 sesión'
     if (!precio_total || Number(precio_total) <= 0) errs.precio_total = 'El precio debe ser mayor a 0'
+    if (!duracion_sesion_min || Number(duracion_sesion_min) <= 0) errs.duracion_sesion_min = 'Duración inválida'
     if (Object.keys(errs).length > 0) { setErroresPaq(errs); return }
 
     const esEdicion = modalPaq !== 'nuevo'
     const body = {
       nombre, tipo, num_sesiones: Number(num_sesiones), precio_total: Number(precio_total),
+      duracion_sesion_min: Number(duracion_sesion_min),
       ...(esEdicion ? { id_paquete: (modalPaq as Paquete).id_paquete } : {}),
     }
 
@@ -334,6 +347,8 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
                     {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
                     {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:true},
                     {icon:'📊', label:'Reportes',             href:'/admin/reportes',         active:false},
+                    {icon:'🕘', label:'Disponibilidad',       href:'/admin/disponibilidad',   active:false},
+                    {icon:'⭐', label:'Opiniones',            href:'/admin/opiniones',        active:false},
                     {icon:'⚠️', label:'Solicitudes de Baja',  href:'/admin/solicitudes-baja', active:false},
                     {icon:'🔍', label:'Logs de Auditoría',   href:'/admin/logs',             active:false},
                     {icon:'⚙️', label:'Configuración',        href:'/admin/configuracion',    active:false},
@@ -526,11 +541,25 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
           {/* ── TAB CONTRATOS ── */}
           {tabActiva==='contratos' && (
             <>
-              <div style={{fontSize:13,color:'var(--muted)',marginBottom:16}}>
-                {contratos.length} contratos activos
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                <div style={{fontSize:13,color:'var(--muted)'}}>
+                  {listaContratos.length} contratos activos
+                </div>
+                <button
+                  onClick={async () => {
+                    setModalContrato(true)
+                    setErroresContrato({})
+                    if (pacientesActivos.length === 0) {
+                      const res = await fetch('/api/admin/pacientes-activos')
+                      const data = await res.json()
+                      if (res.ok) setPacientesActivos(data.pacientes ?? [])
+                    }
+                  }}
+                  style={{background:'linear-gradient(135deg,var(--blue),var(--cyan))',color:'#fff',border:'none',borderRadius:9,padding:'8px 16px',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'Inter',boxShadow:'0 4px 14px rgba(37,99,235,0.3)'}}
+                >+ Nuevo contrato</button>
               </div>
-              {contratos.length === 0 && <div style={{color:'var(--muted)',fontSize:13,textAlign:'center',padding:40}}>No hay contratos registrados</div>}
-              {contratos.map(c => {
+              {listaContratos.length === 0 && <div style={{color:'var(--muted)',fontSize:13,textAlign:'center',padding:40}}>No hay contratos registrados</div>}
+              {listaContratos.map(c => {
                 const pct = c.sesiones_totales > 0 ? (c.sesiones_usadas / c.sesiones_totales * 100) : 0
                 const vence = new Date(c.fecha_vencimiento)
                 const diasRestantes = Math.ceil((vence.getTime() - Date.now()) / (1000*60*60*24))
@@ -555,6 +584,23 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
                       <span>{c.sesiones_usadas}/{c.sesiones_totales} sesiones usadas</span>
                       <span style={{color:'var(--green)',fontWeight:600}}>${Number(c.monto_pagado).toLocaleString('es-MX',{minimumFractionDigits:2})} pagado</span>
                     </div>
+                    {(() => {
+                      const precioTotal = Number(c.paquetes?.precio_total ?? 0)
+                      const saldo = precioTotal - Number(c.monto_pagado)
+                      return (
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}>
+                          <span style={{fontSize:12,color:saldo>0?'var(--amber)':'var(--muted)'}}>
+                            {saldo > 0 ? `Saldo pendiente: $${saldo.toLocaleString('es-MX',{minimumFractionDigits:2})}` : 'Pagado en su totalidad'}
+                          </span>
+                          {saldo > 0 && (
+                            <button
+                              onClick={() => { setModalAbonar(c); setErroresAbono({}) }}
+                              style={{background:'rgba(56,189,248,0.12)',border:'1px solid rgba(56,189,248,0.3)',borderRadius:8,padding:'5px 12px',fontSize:12,fontWeight:600,color:'var(--cyan)',cursor:'pointer',fontFamily:'Inter'}}
+                            >+ Abonar</button>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -612,6 +658,241 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
         </div>
       </div>
 
+      {/* ── MODAL ABONAR A CONTRATO ── */}
+      {modalAbonar && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(6px)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'fadeIn .2s ease'}}
+          onClick={e => { if(e.target===e.currentTarget) setModalAbonar(null) }}>
+          <div style={{background:'#0A1220',border:'1px solid rgba(56,189,248,0.25)',borderRadius:18,width:'100%',maxWidth:420,padding:28,animation:'slideUp .2s ease'}}>
+            <div style={{fontSize:17,fontWeight:700,color:'var(--text)',marginBottom:6}}>💳 Abonar a contrato</div>
+            <p style={{fontSize:13,color:'var(--muted)',marginBottom:8,lineHeight:1.5}}>
+              {modalAbonar.pacientes?.nombre_completo} · {modalAbonar.paquetes?.nombre}
+            </p>
+            <p style={{fontSize:13,color:'var(--amber)',marginBottom:22,fontWeight:600}}>
+              Saldo pendiente: ${(Number(modalAbonar.paquetes?.precio_total ?? 0) - Number(modalAbonar.monto_pagado)).toLocaleString('es-MX',{minimumFractionDigits:2})}
+            </p>
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              const fd = new FormData(e.currentTarget)
+              const monto = fd.get('monto') as string
+              const metodo_pago = fd.get('metodo_pago') as string
+              const estado_pago = fd.get('estado_pago') as string
+
+              const errs: Record<string,string> = {}
+              if (!monto || Number(monto) <= 0) errs.monto = 'Monto inválido'
+              if (!metodo_pago) errs.metodo_pago = 'Selecciona un método'
+              if (Object.keys(errs).length > 0) { setErroresAbono(errs); return }
+
+              setLoadingAbono(true)
+              const res = await fetch('/api/contratos/abonar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contrato_id: modalAbonar.id_contrato_paciente,
+                  monto: Number(monto), metodo_pago, estado_pago: estado_pago || 'pagado',
+                }),
+              })
+              const data = await res.json()
+              setLoadingAbono(false)
+
+              if (!res.ok) { setToast({ msg: data.error ?? 'Error al registrar el abono', type:'error' }); return }
+
+              setListaContratos(prev => prev.map(c => c.id_contrato_paciente === modalAbonar.id_contrato_paciente ? data.contrato : c))
+              setToast({ msg: 'Abono registrado correctamente', type:'success' })
+              setModalAbonar(null)
+            }} noValidate>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Monto ($) *</label>
+                  <input name="monto" type="number" min="0" step="0.01"
+                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresAbono.monto?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}
+                    placeholder="0.00" />
+                  {erroresAbono.monto && <span style={{fontSize:11,color:'var(--red)'}}>{erroresAbono.monto}</span>}
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Método *</label>
+                  <select name="metodo_pago"
+                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresAbono.metodo_pago?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                    <option value="">— Selecciona —</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="aseguradora">Aseguradora</option>
+                  </select>
+                  {erroresAbono.metodo_pago && <span style={{fontSize:11,color:'var(--red)'}}>{erroresAbono.metodo_pago}</span>}
+                </div>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Estado del pago</label>
+                <select name="estado_pago" defaultValue="pagado"
+                  style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid var(--border)',borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                  <option value="pagado">Pagado ahora</option>
+                  <option value="pendiente">Pendiente — cobrar después</option>
+                </select>
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:8,borderTop:'1px solid var(--border)'}}>
+                <button type="button"
+                  style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 18px',fontSize:14,fontWeight:500,color:'var(--muted)',cursor:'pointer',fontFamily:'Inter'}}
+                  onClick={() => setModalAbonar(null)}>Cancelar</button>
+                <button type="submit" disabled={loadingAbono}
+                  style={{background:'linear-gradient(135deg,var(--blue),var(--cyan))',color:'#fff',border:'none',borderRadius:10,padding:'10px 20px',fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Inter',display:'flex',alignItems:'center',gap:8,opacity:loadingAbono?.5:1}}>
+                  {loadingAbono && <span style={{width:14,height:14,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',animation:'spin .7s linear infinite',display:'inline-block'}}/>}
+                  Registrar abono
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL NUEVO CONTRATO ── */}
+      {modalContrato && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(6px)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'fadeIn .2s ease'}}
+          onClick={e => { if(e.target===e.currentTarget) { setModalContrato(false); setPaqueteSeleccionado(null) } }}>
+          <div style={{background:'#0A1220',border:'1px solid rgba(56,189,248,0.25)',borderRadius:18,width:'100%',maxWidth:460,padding:28,animation:'slideUp .2s ease'}}>
+            <div style={{fontSize:17,fontWeight:700,color:'var(--text)',marginBottom:6}}>📄 Nuevo contrato</div>
+            <p style={{fontSize:13,color:'var(--muted)',marginBottom:22,lineHeight:1.5}}>
+              Asigna un paquete a un paciente. La duración de sus sesiones (usada para agendar)
+              saldrá automáticamente de este paquete.
+            </p>
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              const fd = new FormData(e.currentTarget)
+              const paciente_id = fd.get('paciente_id') as string
+              const paquete_id = fd.get('paquete_id') as string
+              const fecha_inicio = fd.get('fecha_inicio') as string
+              const fecha_vencimiento = fd.get('fecha_vencimiento') as string
+              const pagoMonto = fd.get('pago_monto') as string
+              const pagoMetodo = fd.get('pago_metodo') as string
+              const pagoEstado = fd.get('pago_estado') as string
+
+              const errs: Record<string,string> = {}
+              if (!paciente_id) errs.paciente_id = 'Selecciona un paciente'
+              if (!paquete_id) errs.paquete_id = 'Selecciona un paquete'
+              if (!fecha_inicio) errs.fecha_inicio = 'Requerido'
+              if (!fecha_vencimiento) errs.fecha_vencimiento = 'Requerido'
+              if (incluirPagoInicial) {
+                if (!pagoMonto || Number(pagoMonto) <= 0) errs.pago_monto = 'Monto inválido'
+                if (!pagoMetodo) errs.pago_metodo = 'Selecciona un método'
+              }
+              if (Object.keys(errs).length > 0) { setErroresContrato(errs); return }
+
+              setLoadingContrato(true)
+              const res = await fetch('/api/contratos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  paciente_id: Number(paciente_id), paquete_id: Number(paquete_id),
+                  fecha_inicio, fecha_vencimiento,
+                  pago_inicial: incluirPagoInicial ? {
+                    monto: Number(pagoMonto), metodo_pago: pagoMetodo, estado_pago: pagoEstado || 'pagado',
+                  } : undefined,
+                }),
+              })
+              const data = await res.json()
+              setLoadingContrato(false)
+
+              if (!res.ok) { setToast({ msg: data.error ?? 'Error al crear el contrato', type:'error' }); return }
+
+              setListaContratos(prev => [data.contrato, ...prev])
+              setToast({ msg: data.warning ?? 'Contrato creado correctamente', type: data.warning ? 'error' : 'success' })
+              setModalContrato(false)
+              setPaqueteSeleccionado(null)
+            }} noValidate>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Paciente *</label>
+                <select name="paciente_id"
+                  style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.paciente_id?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                  <option value="">— Selecciona un paciente —</option>
+                  {pacientesActivos.map(p => <option key={p.id_paciente} value={p.id_paciente}>{p.nombre_completo}</option>)}
+                </select>
+                {erroresContrato.paciente_id && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.paciente_id}</span>}
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Paquete *</label>
+                <select name="paquete_id"
+                  onChange={e => setPaqueteSeleccionado(paquetes.find(p => String(p.id_paquete) === e.target.value) ?? null)}
+                  style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.paquete_id?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                  <option value="">— Selecciona un paquete —</option>
+                  {paquetes.map(p => <option key={p.id_paquete} value={p.id_paquete}>{p.nombre} · {p.num_sesiones} sesiones · {p.duracion_sesion_min ?? '—'} min</option>)}
+                </select>
+                {erroresContrato.paquete_id && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.paquete_id}</span>}
+                {paqueteSeleccionado && (
+                  <div style={{marginTop:8,fontSize:13,color:'var(--cyan)',fontWeight:600}}>
+                    Precio del paquete: ${Number(paqueteSeleccionado.precio_total).toLocaleString('es-MX',{minimumFractionDigits:2})}
+                  </div>
+                )}
+              </div>
+
+              <div style={{margin:'18px 0 14px',paddingTop:14,borderTop:'1px solid var(--border)'}}>
+                <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text)',cursor:'pointer'}}>
+                  <input type="checkbox" checked={incluirPagoInicial} onChange={e => setIncluirPagoInicial(e.target.checked)} />
+                  💳 Registrar un pago inicial ahora
+                </label>
+              </div>
+
+              {incluirPagoInicial && (
+                <>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+                    <div>
+                      <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Monto ($) *</label>
+                      <input name="pago_monto" type="number" min="0" step="0.01"
+                        defaultValue={paqueteSeleccionado ? paqueteSeleccionado.precio_total : ''}
+                        style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.pago_monto?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}
+                        placeholder="0.00" />
+                      {erroresContrato.pago_monto && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.pago_monto}</span>}
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Método *</label>
+                      <select name="pago_metodo"
+                        style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.pago_metodo?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                        <option value="">— Selecciona —</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="tarjeta">Tarjeta</option>
+                        <option value="aseguradora">Aseguradora</option>
+                      </select>
+                      {erroresContrato.pago_metodo && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.pago_metodo}</span>}
+                    </div>
+                  </div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Estado del pago</label>
+                    <select name="pago_estado" defaultValue="pagado"
+                      style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid var(--border)',borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}>
+                      <option value="pagado">Pagado ahora</option>
+                      <option value="pendiente">Pendiente — cobrar después</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Fecha inicio *</label>
+                  <input name="fecha_inicio" type="date" defaultValue={new Date().toISOString().slice(0,10)}
+                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_inicio?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}} />
+                  {erroresContrato.fecha_inicio && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.fecha_inicio}</span>}
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Fecha vencimiento *</label>
+                  <input name="fecha_vencimiento" type="date" defaultValue={new Date(Date.now()+90*86400000).toISOString().slice(0,10)}
+                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_vencimiento?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}} />
+                  {erroresContrato.fecha_vencimiento && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.fecha_vencimiento}</span>}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:8,borderTop:'1px solid var(--border)'}}>
+                <button type="button"
+                  style={{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 18px',fontSize:14,fontWeight:500,color:'var(--muted)',cursor:'pointer',fontFamily:'Inter'}}
+                  onClick={() => { setModalContrato(false); setPaqueteSeleccionado(null) }}>Cancelar</button>
+                <button type="submit" disabled={loadingContrato}
+                  style={{background:'linear-gradient(135deg,var(--blue),var(--cyan))',color:'#fff',border:'none',borderRadius:10,padding:'10px 20px',fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Inter',display:'flex',alignItems:'center',gap:8,opacity:loadingContrato?.5:1}}>
+                  {loadingContrato && <span style={{width:14,height:14,borderRadius:'50%',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',animation:'spin .7s linear infinite',display:'inline-block'}}/>}
+                  Crear contrato
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ── MODAL CREAR / EDITAR PAQUETE ── */}
       {modalPaq !== null && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(6px)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'fadeIn .2s ease'}}
@@ -656,6 +937,16 @@ export default function FinanzasClient({ pagosMes, pagosAnterior, todosLosPagos,
                     placeholder="6150.00" defaultValue={modalPaq!=='nuevo'?(modalPaq as Paquete).precio_total:''} />
                   {erroresPaq.precio_total && <span style={{fontSize:11,color:'var(--red)'}}>{erroresPaq.precio_total}</span>}
                 </div>
+              </div>
+              <div style={{marginBottom:14}}>
+                <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:7}}>Duración de sesión (min) *</label>
+                <input name="duracion_sesion_min" type="number" min="1" step="1"
+                  style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresPaq.duracion_sesion_min?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,fontFamily:'Inter',color:'var(--text)',outline:'none'}}
+                  placeholder="45" defaultValue={modalPaq!=='nuevo'?(modalPaq as Paquete).duracion_sesion_min ?? 45:45} />
+                {erroresPaq.duracion_sesion_min && <span style={{fontSize:11,color:'var(--red)'}}>{erroresPaq.duracion_sesion_min}</span>}
+                <p style={{fontSize:11,color:'var(--muted)',marginTop:6,lineHeight:1.4}}>
+                  Se usa para calcular los bloques de la agenda del paciente y para autocompletar la duración cuando la secretaria agenda manualmente.
+                </p>
               </div>
               <div style={{display:'flex',gap:10,justifyContent:'flex-end',paddingTop:8,borderTop:'1px solid var(--border)'}}>
                 <button type="button"

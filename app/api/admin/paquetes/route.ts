@@ -15,6 +15,11 @@ const PaqueteSchema = z.object({
   tipo: z.enum(['individual', 'contado', 'aseguradora']),
   num_sesiones: z.coerce.number().int().positive('Debe tener al menos 1 sesión'),
   precio_total: z.coerce.number().positive('El precio debe ser mayor a 0'),
+  // Duración de cada sesión de este paquete — es lo que usa el paciente
+  // al agendar (bloques por bloque) y lo que autocompleta la secretaria
+  // al agendar manualmente. Opcional en el body; si no llega, cae al
+  // default de la base de datos (45 min).
+  duracion_sesion_min: z.coerce.number().int().positive('Debe ser mayor a 0').optional(),
 })
 
 async function verificarAdmin(supabase: any) {
@@ -38,9 +43,13 @@ export async function GET() {
       .order('activo', { ascending: false })
       .order('precio_total', { ascending: true })
 
-    if (error) return NextResponse.json({ error: 'Error al obtener paquetes' }, { status: 500 })
+    if (error) {
+      console.error('Error GET /api/admin/paquetes:', JSON.stringify(error, null, 2))
+      return NextResponse.json({ error: 'Error al obtener paquetes' }, { status: 500 })
+    }
     return NextResponse.json({ paquetes: data })
-  } catch {
+  } catch (err) {
+    console.error('Error interno GET /api/admin/paquetes:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
@@ -56,15 +65,21 @@ export async function POST(request: Request) {
     const parsed = PaqueteSchema.safeParse(body)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
 
-    const { nombre, tipo, num_sesiones, precio_total } = parsed.data
+    const { nombre, tipo, num_sesiones, precio_total, duracion_sesion_min } = parsed.data
     const precio_por_sesion = Number((precio_total / num_sesiones).toFixed(2))
 
     const { data, error } = await supabase
       .from('paquetes')
-      .insert({ nombre, tipo, num_sesiones, precio_total, precio_por_sesion, activo: true })
+      .insert({
+        nombre, tipo, num_sesiones, precio_total, precio_por_sesion, activo: true,
+        ...(duracion_sesion_min ? { duracion_sesion_min } : {}),
+      })
       .select().single()
 
-    if (error) return NextResponse.json({ error: 'Error al crear paquete' }, { status: 500 })
+    if (error) {
+      console.error('Error POST /api/admin/paquetes:', JSON.stringify(error, null, 2))
+      return NextResponse.json({ error: `Error al crear paquete: ${error.message}` }, { status: 500 })
+    }
 
     await supabase.from('audit_logs').insert({
       user_id: user.id, accion: 'CREAR_PAQUETE',
@@ -72,7 +87,8 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({ paquete: data }, { status: 201 })
-  } catch {
+  } catch (err) {
+    console.error('Error interno POST /api/admin/paquetes:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
@@ -91,16 +107,22 @@ export async function PATCH(request: Request) {
     const parsed = PaqueteSchema.safeParse(resto)
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
 
-    const { nombre, tipo, num_sesiones, precio_total } = parsed.data
+    const { nombre, tipo, num_sesiones, precio_total, duracion_sesion_min } = parsed.data
     const precio_por_sesion = Number((precio_total / num_sesiones).toFixed(2))
 
     const { data, error } = await supabase
       .from('paquetes')
-      .update({ nombre, tipo, num_sesiones, precio_total, precio_por_sesion })
+      .update({
+        nombre, tipo, num_sesiones, precio_total, precio_por_sesion,
+        ...(duracion_sesion_min ? { duracion_sesion_min } : {}),
+      })
       .eq('id_paquete', id_paquete)
       .select().single()
 
-    if (error) return NextResponse.json({ error: 'Error al actualizar paquete' }, { status: 500 })
+    if (error) {
+      console.error('Error PATCH /api/admin/paquetes:', JSON.stringify(error, null, 2))
+      return NextResponse.json({ error: `Error al actualizar paquete: ${error.message}` }, { status: 500 })
+    }
 
     await supabase.from('audit_logs').insert({
       user_id: user.id, accion: 'EDITAR_PAQUETE',
@@ -108,7 +130,8 @@ export async function PATCH(request: Request) {
     })
 
     return NextResponse.json({ paquete: data })
-  } catch {
+  } catch (err) {
+    console.error('Error interno PATCH /api/admin/paquetes:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }
@@ -142,7 +165,10 @@ export async function DELETE(request: Request) {
       .update({ activo: false })
       .eq('id_paquete', id)
 
-    if (error) return NextResponse.json({ error: 'Error al desactivar paquete' }, { status: 500 })
+    if (error) {
+      console.error('Error DELETE /api/admin/paquetes:', JSON.stringify(error, null, 2))
+      return NextResponse.json({ error: 'Error al desactivar paquete' }, { status: 500 })
+    }
 
     await supabase.from('audit_logs').insert({
       user_id: user.id, accion: 'DESACTIVAR_PAQUETE',
@@ -150,7 +176,8 @@ export async function DELETE(request: Request) {
     })
 
     return NextResponse.json({ ok: true })
-  } catch {
+  } catch (err) {
+    console.error('Error interno DELETE /api/admin/paquetes:', err)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }
 }

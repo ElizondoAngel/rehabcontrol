@@ -124,10 +124,11 @@ export default function EjerciciosClient({ profile, sesiones, userId }: Props) {
         icono="👤"
         items={[
           { icon:'🏠', label:'Mi Inicio',      href:'/paciente/dashboard', active:false },
-          { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:true  },
           { icon:'📅', label:'Mis Citas',      href:'/paciente/citas',     active:false },
+          { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:true  },
           { icon:'📈', label:'Mi Progreso',    href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',      href:'/paciente/pagos',     active:false },
+          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon:'⚙️', label:'Mis Datos',      href:'/paciente/perfil',    active:false },
         ]}
       />

@@ -392,7 +392,9 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
             { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
             { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:false },
             { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:true },
+            { icon:'📄', label:'Contratos',      href:'/secretaria/contratos', active:false },
             { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false },
+            { icon:'🕘', label:'Disponibilidad', href:'/secretaria/disponibilidad', active:false },
           ]}
         />
 

@@ -28,6 +28,10 @@ export default function PacienteDashboardClient({
   const pagosPendientes = ultimosPagos.filter((p: any) => p.estado_pago === 'pendiente').length
   const proximaCita     = proximasCitas[0]
 
+  const precioPaquete = Number(contrato?.paquetes?.precio_total ?? 0)
+  const montoPagado   = Number(contrato?.monto_pagado ?? 0)
+  const saldoPaquete   = contrato ? Math.max(precioPaquete - montoPagado, 0) : null
+
   return (
     <>
       <style>{`
@@ -107,6 +111,7 @@ export default function PacienteDashboardClient({
           { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon:'📈', label:'Mi Progreso', href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',   href:'/paciente/pagos',     active:false },
+          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon:'⚙️', label:'Mis Datos',   href:'/paciente/perfil',    active:false },
         ]}
       />
@@ -148,11 +153,50 @@ export default function PacienteDashboardClient({
             </div>
             <div className="metric">
               <div className="metric-label">Saldo pendiente</div>
-              <div className="metric-num">{pagosPendientes === 0 ? '✓' : pagosPendientes}</div>
-              <div className="metric-sub">{pagosPendientes === 0 ? 'Todo al corriente' : 'pagos pendientes'}</div>
+              <div className="metric-num" style={{fontSize: saldoPaquete !== null ? 22 : 32}}>
+                {saldoPaquete !== null
+                  ? (saldoPaquete === 0 ? '✓' : `$${saldoPaquete.toLocaleString('es-MX',{minimumFractionDigits:2})}`)
+                  : (pagosPendientes === 0 ? '✓' : pagosPendientes)}
+              </div>
+              <div className="metric-sub">
+                {saldoPaquete !== null
+                  ? (saldoPaquete === 0 ? 'Paquete pagado en su totalidad' : 'de tu paquete actual')
+                  : (pagosPendientes === 0 ? 'Todo al corriente' : 'pagos pendientes')}
+              </div>
               <div className="metric-icon icon-amber">💳</div>
             </div>
           </div>
+
+          {contrato && (
+            <div className="progress-card" style={{marginBottom:24}}>
+              <div className="progress-header">
+                <span className="progress-title">Mi paquete — {contrato.paquetes?.nombre ?? 'Activo'}</span>
+                <span className="progress-pct">{contrato.sesiones_restantes} restantes</span>
+              </div>
+              <div className="progress-diag">
+                Vence el {new Date(contrato.fecha_vencimiento).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' })}
+              </div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{width:`${contrato.sesiones_totales > 0 ? (contrato.sesiones_usadas / contrato.sesiones_totales * 100) : 0}%`}}/>
+              </div>
+              <div className="progress-stats">
+                <div className="pstat">
+                  <div className="pstat-num">{contrato.sesiones_usadas}/{contrato.sesiones_totales}</div>
+                  <div className="pstat-lbl">Sesiones usadas</div>
+                </div>
+                <div className="pstat">
+                  <div className="pstat-num" style={{color: saldoPaquete && saldoPaquete > 0 ? 'var(--amber)' : 'var(--green)'}}>
+                    ${(saldoPaquete ?? 0).toLocaleString('es-MX',{minimumFractionDigits:0})}
+                  </div>
+                  <div className="pstat-lbl">Saldo pendiente</div>
+                </div>
+                <div className="pstat">
+                  <div className="pstat-num">${montoPagado.toLocaleString('es-MX',{minimumFractionDigits:0})}</div>
+                  <div className="pstat-lbl">Pagado</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="progress-card">
             <div className="progress-header">

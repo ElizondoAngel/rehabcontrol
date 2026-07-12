@@ -329,7 +329,9 @@ export default function PagosClient({ pagosIniciales, pacientes, currentUserId }
                 { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
                 { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:false },
                 { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:false },
+                { icon:'📄', label:'Contratos',      href:'/secretaria/contratos', active:false },
                 { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:true },
+                { icon:'🕘', label:'Disponibilidad', href:'/secretaria/disponibilidad', active:false },
               ]}
         />
 

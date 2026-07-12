@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // ── DATOS NUEVOS ─────────────────────────────────────────────
 const terapeutas = [
@@ -48,12 +48,14 @@ const paquetes = [
 ]
 
 const galeria = [
-  { id: 1, emoji: "🏋️", titulo: "Rehabilitación de rodilla",    terapia: "Rehabilitación ortopédica",  duracion: "8 semanas · 16 sesiones",  desc: "Ejercicios de fortalecimiento del cuádriceps post-artroscopia. El paciente recuperó el 100% de la movilidad en 8 semanas." },
-  { id: 2, emoji: "🧘", titulo: "Terapia postural",              terapia: "Rehabilitación postural",    duracion: "6 semanas · 12 sesiones",  desc: "Reeducación postural global para dolor lumbar crónico. Reducción del dolor de 8/10 a 2/10 en 12 sesiones." },
-  { id: 3, emoji: "⚡", titulo: "Electroterapia de hombro",      terapia: "Electroterapia",             duracion: "5 semanas · 10 sesiones",  desc: "Aplicación de TENS y ultrasonido en tendinitis de manguito rotador. Resolución completa en 10 sesiones." },
-  { id: 4, emoji: "🏃", titulo: "Readaptación deportiva",        terapia: "Fisioterapia deportiva",     duracion: "16 semanas · 30 sesiones", desc: "Vuelta al deporte tras rotura de ligamento cruzado anterior. Atleta regresó a la cancha en 4 meses." },
-  { id: 5, emoji: "👴", titulo: "Rehabilitación geriátrica",     terapia: "Rehabilitación geriátrica", duracion: "10 semanas · 20 sesiones", desc: "Mejora de equilibrio y marcha en adulto mayor de 78 años. Reducción del riesgo de caídas en un 70%." },
-  { id: 6, emoji: "💆", titulo: "Terapia manual cervical",       terapia: "Terapia manual",             duracion: "4 semanas · 8 sesiones",   desc: "Tratamiento de cefalea tensional y contractura cervical. Resolución de síntomas en 8 sesiones." },
+  { id: 1, img: "/images/consulta-inicial.jpg",       titulo: "Consulta inicial",           terapia: "Evaluación diagnóstica",     duracion: "Primera sesión · sin costo",  desc: "Valoración completa del paciente, historial clínico y definición del plan de tratamiento personalizado." },
+  { id: 2, img: "/images/terapia-hombro.jpg",         titulo: "Terapia de hombro",          terapia: "Rehabilitación ortopédica",  duracion: "5 semanas · 10 sesiones",  desc: "Movilización activa y fortalecimiento en tendinitis de manguito rotador. Resolución completa en 10 sesiones." },
+  { id: 3, img: "/images/terapia-espalda.jpg",        titulo: "Terapia de espalda",         terapia: "Rehabilitación postural",    duracion: "6 semanas · 12 sesiones",  desc: "Reeducación postural global para dolor lumbar crónico. Reducción del dolor de 8/10 a 2/10 en 12 sesiones." },
+  { id: 4, img: "/images/ejercicios-terapeuticos.jpg",titulo: "Ejercicios terapéuticos",    terapia: "Fisioterapia activa",        duracion: "8 semanas · 16 sesiones",  desc: "Ejercicios de resistencia y fortalecimiento progresivo, adaptados a la capacidad de cada paciente." },
+  { id: 5, img: "/images/electroterapia.jpg",         titulo: "Electroterapia",             terapia: "Electroterapia",             duracion: "5 semanas · 10 sesiones",  desc: "Aplicación de TENS y ultrasonido terapéutico para acelerar la recuperación y reducir el dolor." },
+  { id: 6, img: "/images/adulto-mayor.jpg",           titulo: "Rehabilitación geriátrica",  terapia: "Rehabilitación geriátrica", duracion: "10 semanas · 20 sesiones", desc: "Mejora de equilibrio y marcha en adulto mayor. Reducción del riesgo de caídas en un 70%." },
+  { id: 7, img: "/images/rehabilitacion-rodilla.jpg", titulo: "Rehabilitación de rodilla",  terapia: "Rehabilitación ortopédica",  duracion: "8 semanas · 16 sesiones",  desc: "Entrenamiento de marcha con barras paralelas post-cirugía de rodilla. Recuperación completa de la movilidad." },
+  { id: 8, img: "/images/terapia-manual.jpg",         titulo: "Terapia manual",             terapia: "Terapia manual",             duracion: "4 semanas · 8 sesiones",   desc: "Técnicas de terapia manual y liberación miofascial para contracturas y tensión muscular." },
 ]
 
 // ── MODAL TERAPEUTA ──────────────────────────────────────────
@@ -100,15 +102,17 @@ function TerapeutaModal({ t, onClose }: { t: typeof terapeutas[0]; onClose: () =
 function GaleriaModal({ item, onClose }: { item: typeof galeria[0]; onClose: () => void }) {
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
-      <div style={{background:'#0A1220',border:'1px solid rgba(56,189,248,0.2)',borderRadius:20,padding:32,maxWidth:440,width:'100%',position:'relative',textAlign:'center'}} onClick={e=>e.stopPropagation()}>
-        <button onClick={onClose} style={{position:'absolute',top:16,right:16,background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:8,width:32,height:32,color:'#8C9BB5',cursor:'pointer',fontSize:16}}>✕</button>
-        <div style={{fontSize:52,marginBottom:16}}>{item.emoji}</div>
+      <div style={{background:'#0A1220',border:'1px solid rgba(56,189,248,0.2)',borderRadius:20,padding:0,maxWidth:440,width:'100%',position:'relative',textAlign:'center',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{position:'absolute',top:16,right:16,background:'rgba(0,0,0,0.4)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:8,width:32,height:32,color:'#fff',cursor:'pointer',fontSize:16,zIndex:2}}>✕</button>
+        <img src={item.img} alt={item.titulo} style={{width:'100%', height:200, objectFit:'cover', display:'block'}} />
+        <div style={{padding:32}}>
         <div style={{fontSize:18,fontWeight:700,color:'#E7EDF7',marginBottom:8}}>{item.titulo}</div>
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(56,189,248,0.12)',border:'1px solid rgba(56,189,248,0.25)',borderRadius:100,padding:'4px 12px',marginBottom:16}}>
           <span style={{fontSize:11,fontWeight:600,color:'#38BDF8'}}>{item.terapia}</span>
         </div>
         <p style={{fontSize:14,color:'#8C9BB5',lineHeight:1.75,marginBottom:16}}>{item.desc}</p>
         <div style={{background:'rgba(255,255,255,0.04)',borderRadius:10,padding:'10px 14px',fontSize:12,color:'#8C9BB5'}}>⏱ {item.duracion}</div>
+        </div>
       </div>
     </div>
   )
@@ -117,6 +121,7 @@ function GaleriaModal({ item, onClose }: { item: typeof galeria[0]; onClose: () 
 // ── NAV CON MENÚ HAMBURGUESA ────────────────────────────────
 function NavConMenu() {
   const [abierto, setAbierto] = useState(false)
+  // Lista plana — se usa en el drawer móvil, donde el espacio vertical no es problema
   const links = [
     {href:'#inicio',        label:'Inicio'},
     {href:'#nosotros',      label:'Nosotros'},
@@ -124,9 +129,28 @@ function NavConMenu() {
     {href:'#servicios',     label:'Servicios'},
     {href:'#instalaciones', label:'Instalaciones'},
     {href:'#galeria',       label:'Galería'},
+    {href:'#precios',       label:'Precios'},
     {href:'#proceso',       label:'Cómo funciona'},
+    {href:'#opiniones',     label:'Opiniones'},
     {href:'#contacto',      label:'Contacto'},
-    
+  ]
+  // Agrupada por tema — se usa en el nav de escritorio, para no amontonar
+  // 8 links sueltos en una sola fila.
+  const gruposDesktop = [
+    { href:'#inicio', label:'Inicio' },
+    { label:'La Clínica', items:[
+      {href:'#nosotros',      label:'Nosotros'},
+      {href:'#equipo',        label:'Equipo'},
+      {href:'#instalaciones', label:'Instalaciones'},
+    ]},
+    { label:'Pacientes', items:[
+      {href:'#servicios',  label:'Servicios'},
+      {href:'#proceso',    label:'Cómo funciona'},
+      {href:'#galeria',    label:'Galería'},
+      {href:'#precios',    label:'Precios'},
+      {href:'#opiniones',  label:'Opiniones'},
+    ]},
+    { href:'#contacto', label:'Contacto' },
   ]
   return (
     <>
@@ -139,7 +163,20 @@ function NavConMenu() {
           </div>
         </a>
         <ul className="nav-links">
-          {links.map(l => <li key={l.href}><a href={l.href}>{l.label}</a></li>)}
+          {gruposDesktop.map(g =>
+            g.href ? (
+              <li key={g.href}><a href={g.href}>{g.label}</a></li>
+            ) : (
+              <li key={g.label} className="nav-dropdown">
+                <span className="nav-dropdown-label">{g.label} <span className="nav-chevron">▾</span></span>
+                <div className="nav-dropdown-panel">
+                  <div className="nav-dropdown-panel-inner">
+                    {g.items!.map(item => <a key={item.href} href={item.href}>{item.label}</a>)}
+                  </div>
+                </div>
+              </li>
+            )
+          )}
         </ul>
         <div style={{display:'flex', alignItems:'center', gap:10}}>
           <Link href="/login" className="nav-cta">Portal de pacientes →</Link>
@@ -152,7 +189,7 @@ function NavConMenu() {
       {/* Overlay */}
       <div className={`nav-overlay${abierto?' open':''}`} onClick={() => setAbierto(false)}/>
 
-      {/* Drawer */}
+      {/* Drawer — sigue siendo la lista plana, aquí sí cabe todo sin problema */}
       <div className={`nav-drawer${abierto?' open':''}`}>
         <div className="nav-drawer-header">
           <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -181,6 +218,14 @@ export default function LandingPage() {
   const [terapeutaModal, setTerapeutaModal] = useState<typeof terapeutas[0] | null>(null)
   const [galeriaModal, setGaleriaModal]     = useState<typeof galeria[0] | null>(null)
   const [hoveredGaleria, setHoveredGaleria] = useState<number | null>(null)
+  const [opinionesPublicas, setOpinionesPublicas] = useState<{ calificacion: number; comentario: string; paciente_nombre: string; terapeuta_nombre: string | null }[]>([])
+
+  useEffect(() => {
+    fetch('/api/opiniones/publicas')
+      .then(r => r.json())
+      .then(data => setOpinionesPublicas(data.opiniones ?? []))
+      .catch(() => setOpinionesPublicas([]))
+  }, [])
 
   return (
     <>
@@ -235,9 +280,33 @@ export default function LandingPage() {
         }
         .nav-name { font-size:15px; font-weight:700; color:#fff; letter-spacing:-0.01em; }
         .nav-tag  { font-size:10px; font-weight:600; color:var(--cyan); letter-spacing:0.1em; text-transform:uppercase; }
-        .nav-links { display:flex; gap:36px; list-style:none; }
+        .nav-links { display:flex; align-items:center; gap:32px; list-style:none; }
         .nav-links a { font-size:14px; font-weight:500; color:var(--muted); text-decoration:none; transition:color .2s; }
         .nav-links a:hover { color:#fff; }
+        .nav-dropdown { position:relative; }
+        .nav-dropdown-label {
+          font-size:14px; font-weight:500; color:var(--muted); cursor:default;
+          display:flex; align-items:center; gap:5px; transition:color .2s; user-select:none;
+        }
+        .nav-dropdown:hover .nav-dropdown-label { color:#fff; }
+        .nav-chevron { font-size:9px; transition:transform .2s; display:inline-block; }
+        .nav-dropdown:hover .nav-chevron { transform:rotate(180deg); }
+        .nav-dropdown-panel {
+          position:absolute; top:100%; left:50%; transform:translateX(-50%) translateY(-6px);
+          padding-top:14px; opacity:0; visibility:hidden; transition:opacity .18s ease, transform .18s ease, visibility .18s;
+          z-index:110;
+        }
+        .nav-dropdown:hover .nav-dropdown-panel { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+        .nav-dropdown-panel-inner {
+          background:#0A1220; border:1px solid rgba(56,189,248,0.15); border-radius:12px;
+          padding:8px; min-width:190px; display:flex; flex-direction:column; gap:2px;
+          box-shadow:0 16px 40px rgba(0,0,0,0.5);
+        }
+        .nav-dropdown-panel-inner a {
+          padding:10px 12px; border-radius:8px; font-size:13.5px; font-weight:500;
+          color:var(--muted); text-decoration:none; transition:all .15s; white-space:nowrap;
+        }
+        .nav-dropdown-panel-inner a:hover { background:rgba(56,189,248,0.1); color:#fff; }
         .nav-cta {
           background:linear-gradient(135deg,var(--blue),var(--cyan));
           color:#fff; border:none; border-radius:10px;
@@ -528,11 +597,12 @@ export default function LandingPage() {
           transition:transform .2s, box-shadow .2s;
         }
         .galeria-thumb {
-          height:140px;
+          height:190px;
           background:linear-gradient(135deg,rgba(37,99,235,0.1),rgba(56,189,248,0.08));
           display:flex; align-items:center; justify-content:center;
-          font-size:52px; position:relative; overflow:hidden;
+          position:relative; overflow:hidden;
         }
+        .galeria-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
         .galeria-overlay {
           position:absolute; inset:0;
           background:rgba(37,99,235,0.88);
@@ -543,6 +613,15 @@ export default function LandingPage() {
 
         /* ── PRECIOS ── */
         .precios-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; max-width:900px; margin:0 auto; }
+        .opiniones-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+        .opinion-card {
+          background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:16px;
+          padding:22px 24px; display:flex; flex-direction:column; gap:12px;
+        }
+        .opinion-stars { color:#F5B400; font-size:15px; letter-spacing:2px; }
+        .opinion-texto { font-size:13.5px; color:var(--muted); line-height:1.65; flex:1; }
+        .opinion-autor { font-size:13px; font-weight:600; color:var(--text); }
+        .opinion-terapeuta { font-size:11.5px; color:var(--cyan); margin-top:2px; }
         .precio-card {
           border-radius:20px; padding:32px 26px; position:relative;
           transition:transform .2s;
@@ -701,6 +780,7 @@ export default function LandingPage() {
           .equipo-grid{grid-template-columns:repeat(2,1fr)}
           .galeria-grid{grid-template-columns:repeat(2,1fr)}
           .precios-grid{grid-template-columns:1fr}
+          .opiniones-grid{grid-template-columns:1fr}
           .instalaciones-grid{grid-template-columns:1fr}
           footer{flex-direction:column;align-items:center;text-align:center}
         }
@@ -888,6 +968,13 @@ export default function LandingPage() {
             <h2 className="section-title section-title-dark">Espacio clínico<br/><span className="grad">diseñado para tu recuperación</span></h2>
             <p style={{fontSize:16, color:'var(--muted)', maxWidth:520, margin:'0 auto'}}>Contamos con áreas especializadas y equipos de última generación para ofrecerte la mejor atención.</p>
           </div>
+          <div style={{borderRadius:20, overflow:'hidden', marginBottom:40, position:'relative', border:'1px solid var(--border)'}}>
+            <img src="/images/fachada.jpg" alt="Fachada de la clínica Rehabilitandomed" style={{width:'100%', height:320, objectFit:'cover', display:'block'}} />
+            <div style={{position:'absolute', bottom:0, left:0, right:0, background:'linear-gradient(0deg, rgba(6,11,20,0.85), transparent)', padding:'40px 24px 18px'}}>
+              <div style={{fontSize:14, fontWeight:600, color:'#fff'}}>Nuestra clínica</div>
+              <div style={{fontSize:12.5, color:'rgba(255,255,255,0.7)'}}>Un espacio pensado para tu recuperación, cerca de ti</div>
+            </div>
+          </div>
           <div className="instalaciones-grid">
             {instalaciones.map(inst => (
               <div key={inst.nombre} className="instalacion-card">
@@ -917,7 +1004,7 @@ export default function LandingPage() {
                 onMouseLeave={() => setHoveredGaleria(null)}
                 onClick={() => setGaleriaModal(item)}>
                 <div className="galeria-thumb">
-                  {item.emoji}
+                  <img src={item.img} alt={item.titulo} loading="lazy" />
                   <div className="galeria-overlay">
                     <div style={{fontSize:14, fontWeight:700, color:'#fff', textAlign:'center', padding:'0 16px', lineHeight:1.4}}>{item.titulo}</div>
                     <div style={{fontSize:11, color:'rgba(255,255,255,0.85)', background:'rgba(255,255,255,0.15)', borderRadius:100, padding:'3px 10px'}}>{item.terapia}</div>
@@ -937,7 +1024,7 @@ export default function LandingPage() {
 
       {/* ── PRECIOS (NUEVO, sección oscura) ── */}
       <div className="fade-light-dark"/>
-      <section style={{background:'var(--bg-2)', padding:'96px 6%'}}>
+      <section id="precios" style={{background:'var(--bg-2)', padding:'96px 6%'}}>
         <div className="container">
           <div style={{textAlign:'center', marginBottom:52}}>
             <div className="section-tag center cyan">Precios</div>
@@ -965,6 +1052,30 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── OPINIONES (paciente envía, admin aprueba) ── */}
+      {opinionesPublicas.length > 0 && (
+        <section id="opiniones" style={{background:'var(--bg-2)', padding:'96px 6%'}}>
+          <div className="container">
+            <div style={{textAlign:'center', marginBottom:52}}>
+              <div className="section-tag center cyan">Opiniones</div>
+              <h2 className="section-title section-title-dark">Lo que dicen<br/><span className="grad">nuestros pacientes</span></h2>
+            </div>
+            <div className="opiniones-grid">
+              {opinionesPublicas.slice(0, 6).map((o, i) => (
+                <div key={i} className="opinion-card">
+                  <div className="opinion-stars">{'★'.repeat(o.calificacion)}{'☆'.repeat(5 - o.calificacion)}</div>
+                  <div className="opinion-texto">"{o.comentario}"</div>
+                  <div>
+                    <div className="opinion-autor">{o.paciente_nombre}</div>
+                    {o.terapeuta_nombre && <div className="opinion-terapeuta">Atendido por {o.terapeuta_nombre}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── PROCESO (original intacto) ── */}
       <section className="proceso-section" id="proceso">

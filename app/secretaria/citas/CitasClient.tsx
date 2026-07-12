@@ -34,7 +34,7 @@ interface Cita {
   terapeuta_id: string
   fecha_hora: string
   duracion_min: number
-  estado: 'programada'|'completada'|'cancelada'|'no_asistio'
+  estado: 'programada'|'completada'|'cancelada'|'no_asistio'|'pendiente_aprobacion'
   notas?: string
   pacientes?: { nombre_completo: string }
   profiles?: { nombre_completo: string }
@@ -100,10 +100,12 @@ function Loader() {
 }
 
 const ESTADO_LABELS: Record<string,string> = {
-  programada: 'Programada', completada: 'Completada', cancelada: 'Cancelada', no_asistio: 'No asistió'
+  programada: 'Programada', completada: 'Completada', cancelada: 'Cancelada', no_asistio: 'No asistió',
+  pendiente_aprobacion: 'Pendiente de aprobación',
 }
 const ESTADO_CLASS: Record<string,string> = {
-  programada: 'b-blue', completada: 'b-green', cancelada: 'b-red', no_asistio: 'b-amber'
+  programada: 'b-blue', completada: 'b-green', cancelada: 'b-red', no_asistio: 'b-amber',
+  pendiente_aprobacion: 'b-purple',
 }
 const METODO_LABELS: Record<string,string> = {
   efectivo: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', aseguradora: 'Aseguradora'
@@ -126,6 +128,37 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
   const [registrarPago, setRegistrarPago] = useState(false)
   const [modalPagoCita, setModalPagoCita] = useState<Cita|null>(null)
   const [erroresPago, setErroresPago] = useState<Record<string,string>>({})
+  const [infoPaquete, setInfoPaquete] = useState<{ tiene_contrato: boolean; paquete_nombre?: string; duracion_sesion_min?: number } | null>(null)
+  const [procesandoSolicitud, setProcesandoSolicitud] = useState<number | null>(null)
+
+  // ── SOLICITUDES PENDIENTES — visibles sin importar el día seleccionado ──
+  const citasPendientes = useMemo(() => {
+    return citas
+      .filter(c => c.estado === 'pendiente_aprobacion')
+      .sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora))
+  }, [citas])
+
+  async function resolverSolicitud(cita: Cita, accion: 'confirmar' | 'rechazar') {
+    setProcesandoSolicitud(cita.id_cita)
+    const res = await fetch('/api/citas/aprobar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cita_id: cita.id_cita, accion }),
+    })
+    const data = await res.json()
+    setProcesandoSolicitud(null)
+
+    if (!res.ok) {
+      setToast({ msg: data.error ?? 'No se pudo procesar la solicitud', type: 'error' })
+      return
+    }
+
+    setCitas(prev => prev.map(c => c.id_cita === cita.id_cita ? { ...c, estado: data.cita.estado } : c))
+    setToast({
+      msg: accion === 'confirmar' ? 'Cita confirmada — se notificó al paciente por correo' : 'Solicitud rechazada',
+      type: 'success',
+    })
+  }
 
 
 
@@ -156,12 +189,14 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
     setModoEdicion(null)
     setErrores({})
     setRegistrarPago(false)
+    setInfoPaquete(null)
     setModalAbierto(true)
   }
   function abrirModalEdicion(c: Cita) {
     setModoEdicion(c)
     setErrores({})
     setRegistrarPago(false)
+    setInfoPaquete(null)
     setModalAbierto(true)
   }
   function cerrarModal() {
@@ -169,12 +204,34 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
     setModoEdicion(null)
     setErrores({})
     setRegistrarPago(false)
+    setInfoPaquete(null)
   }
 
-  // ── EVENTO: al elegir paciente, filtrar terapeuta sugerido ────
+  // ── EVENTO: al elegir paciente, filtrar terapeuta sugerido Y
+  //    autocompletar la duración según su paquete activo ──────────
   function handlePacienteChange(pacienteId: string) {
     const p = pacientes.find(x => x.id_paciente === Number(pacienteId))
     return p?.terapeuta_id ?? ''
+  }
+
+  async function consultarPaqueteDePaciente(pacienteId: string, form: HTMLFormElement) {
+    setInfoPaquete(null)
+    if (!pacienteId) return
+    try {
+      const res = await fetch(`/api/contratos/activo?paciente_id=${pacienteId}`)
+      const data = await res.json()
+      if (!res.ok) return
+      setInfoPaquete(data)
+      if (data.tiene_contrato && data.duracion_sesion_min) {
+        const sel = form.elements.namedItem('duracion_min') as HTMLSelectElement
+        // Autocompleta, pero no bloquea — la secretaria puede cambiarlo si hace falta.
+        const opciones = ['30','45','60','90']
+        const valor = String(data.duracion_sesion_min)
+        if (sel && opciones.includes(valor)) sel.value = valor
+      }
+    } catch {
+      // Si falla la consulta, simplemente no autocompleta — no bloquea el flujo.
+    }
   }
 
   // ── GUARDAR CITA (Fetch asíncrona) ────────────────────────────
@@ -395,6 +452,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
         .b-green{background:rgba(52,211,153,0.15);color:var(--green)}
         .b-red{background:rgba(242,85,85,0.15);color:var(--red)}
         .b-amber{background:rgba(245,180,0,0.15);color:var(--amber)}
+        .b-purple{background:rgba(167,139,250,0.15);color:#A78BFA}
         .actions{display:flex;justify-content:flex-end}
         .btn-menu{background:var(--surface2);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--muted);transition:all .18s;font-family:'Inter',sans-serif}
         .btn-menu:hover{background:rgba(56,189,248,0.15);border-color:rgba(56,189,248,0.3);color:var(--cyan)}
@@ -474,7 +532,9 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
                 { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
                 { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:true },
                 { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:false },
+                { icon:'📄', label:'Contratos',      href:'/secretaria/contratos', active:false },
                 { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false },
+                { icon:'🕘', label:'Disponibilidad', href:'/secretaria/disponibilidad', active:false },
               ]}
       />
 
@@ -501,6 +561,43 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
             </div>
             <button className="btn-nuevo" onClick={abrirModalNuevo}>+ Nueva cita</button>
           </div>
+
+          {/* SOLICITUDES PENDIENTES — de cualquier día, no solo el seleccionado */}
+          {citasPendientes.length > 0 && (
+            <div style={{background:'rgba(167,139,250,0.06)',border:'1px solid rgba(167,139,250,0.25)',borderRadius:14,padding:'16px 20px',marginBottom:22}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                <span style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>⏳ Solicitudes pendientes de aprobación</span>
+                <span style={{fontSize:11,fontWeight:700,color:'#A78BFA',background:'rgba(167,139,250,0.15)',padding:'2px 9px',borderRadius:100}}>
+                  {citasPendientes.length}
+                </span>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {citasPendientes.map(c => (
+                  <div key={c.id_cita} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--surface2)',borderRadius:10,padding:'10px 14px',gap:10,flexWrap:'wrap'}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{c.pacientes?.nombre_completo ?? '—'}</div>
+                      <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>
+                        {new Date(c.fecha_hora).toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'})}, {formatHora(c.fecha_hora)} hrs
+                        {' '}· {c.duracion_min} min · {c.profiles?.nombre_completo ?? 'Terapeuta'}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button
+                        disabled={procesandoSolicitud === c.id_cita}
+                        onClick={() => resolverSolicitud(c, 'confirmar')}
+                        style={{background:'rgba(52,211,153,0.15)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:8,padding:'6px 14px',fontSize:12.5,fontWeight:600,color:'var(--green)',cursor:'pointer',fontFamily:'Inter',opacity:procesandoSolicitud===c.id_cita?0.5:1}}
+                      >✓ Confirmar</button>
+                      <button
+                        disabled={procesandoSolicitud === c.id_cita}
+                        onClick={() => resolverSolicitud(c, 'rechazar')}
+                        style={{background:'rgba(242,85,85,0.10)',border:'1px solid rgba(242,85,85,0.3)',borderRadius:8,padding:'6px 14px',fontSize:12.5,fontWeight:600,color:'var(--red)',cursor:'pointer',fontFamily:'Inter',opacity:procesandoSolicitud===c.id_cita?0.5:1}}
+                      >✕ Rechazar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* NAVEGADOR DE DÍA — eventos click */}
           <div className="day-nav">
@@ -622,6 +719,7 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
                         const sugerido = handlePacienteChange(e.target.value)
                         const sel = (e.target.form?.elements.namedItem('terapeuta_id') as HTMLSelectElement)
                         if (sel && sugerido) sel.value = sugerido
+                        if (e.target.form) consultarPaqueteDePaciente(e.target.value, e.target.form)
                       }}>
                       <option value="">— Selecciona un paciente —</option>
                       {pacientes.map(p => (
@@ -669,6 +767,16 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
                       <option value="90">90 minutos</option>
                     </select>
                     {errores.duracion_min && <span className="err-msg">{errores.duracion_min}</span>}
+                    {infoPaquete?.tiene_contrato && infoPaquete.duracion_sesion_min && (
+                      <span style={{fontSize:11.5,color:'var(--cyan)',marginTop:4,display:'block'}}>
+                        ⓘ Autocompletado según su paquete "{infoPaquete.paquete_nombre}" ({infoPaquete.duracion_sesion_min} min) — puedes cambiarlo si hace falta.
+                      </span>
+                    )}
+                    {infoPaquete && !infoPaquete.tiene_contrato && (
+                      <span style={{fontSize:11.5,color:'var(--amber)',marginTop:4,display:'block'}}>
+                        ⚠ Este paciente no tiene un paquete activo — la duración se dejó por defecto.
+                      </span>
+                    )}
                   </div>
                   {/* Notas */}
                   <div className="form-group form-grid-full">

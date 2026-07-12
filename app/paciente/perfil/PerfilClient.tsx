@@ -234,6 +234,7 @@ export default function PerfilClient({
           { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon: '📈', label: 'Mi Progreso', href: '/paciente/progreso',  active: false },
           { icon: '💳', label: 'Mis Pagos',   href: '/paciente/pagos',     active: false },
+          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon: '⚙️', label: 'Mis Datos',   href: '/paciente/perfil',    active: true },
          
         ]}

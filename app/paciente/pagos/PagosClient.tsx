@@ -27,7 +27,7 @@ function agruparPorMes(pagos: any[]) {
   return Object.entries(grupos)
 }
 
-export default function PagosClient({ profile, pagos, userId }: any) {
+export default function PagosClient({ profile, pagos, contrato, userId }: any) {
 
   const [filtro, setFiltro] = useState('todos')
 
@@ -136,6 +136,7 @@ export default function PagosClient({ profile, pagos, userId }: any) {
           { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon:'📈', label:'Mi Progreso', href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',   href:'/paciente/pagos',     active:true  },
+          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon:'⚙️', label:'Mis Datos',   href:'/paciente/perfil',    active:false },
         ]}
       />
@@ -198,6 +199,41 @@ export default function PagosClient({ profile, pagos, userId }: any) {
               </div>
             </div>
           </div>
+
+          {contrato && (
+            <div className="mes-grupo" style={{background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:14,padding:'18px 20px',marginBottom:26}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>📦 Mi paquete — {contrato.paquetes?.nombre ?? 'Activo'}</div>
+                <span style={{fontSize:11,fontWeight:700,color:'var(--cyan)',background:'rgba(56,189,248,0.12)',padding:'3px 10px',borderRadius:100}}>
+                  {contrato.sesiones_restantes} sesiones restantes
+                </span>
+              </div>
+              <div style={{fontSize:12,color:'var(--muted)',marginBottom:12}}>
+                Vence el {new Date(contrato.fecha_vencimiento).toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'})}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+                <div style={{background:'var(--surface2)',borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+                  <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>{contrato.sesiones_usadas}/{contrato.sesiones_totales}</div>
+                  <div style={{fontSize:10.5,color:'var(--muted)',marginTop:2}}>Sesiones usadas</div>
+                </div>
+                <div style={{background:'var(--surface2)',borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+                  <div style={{fontSize:16,fontWeight:700,color:'var(--green)'}}>${formatMoney(Number(contrato.monto_pagado))}</div>
+                  <div style={{fontSize:10.5,color:'var(--muted)',marginTop:2}}>Pagado</div>
+                </div>
+                <div style={{background:'var(--surface2)',borderRadius:10,padding:'10px 12px',textAlign:'center'}}>
+                  {(() => {
+                    const saldo = Math.max(Number(contrato.paquetes?.precio_total ?? 0) - Number(contrato.monto_pagado), 0)
+                    return (
+                      <>
+                        <div style={{fontSize:16,fontWeight:700,color: saldo > 0 ? 'var(--amber)' : 'var(--green)'}}>${formatMoney(saldo)}</div>
+                        <div style={{fontSize:10.5,color:'var(--muted)',marginTop:2}}>Saldo pendiente</div>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="filtros">
             {['todos','pagado','pendiente'].map(f => (

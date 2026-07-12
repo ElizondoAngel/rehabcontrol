@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
 import TopbarActions from '@/app/components/TopbarActions'
+import AgendarCitaBloques from './AgendarCitaBloques'
 
 function relativoODia(fecha: Date, dia: number, mes: string) {
   const hoy = new Date(); hoy.setHours(0,0,0,0)
@@ -16,7 +18,7 @@ function relativoODia(fecha: Date, dia: number, mes: string) {
 }
 
 export default function CitasClient({ profile, citas, userId }: any) {
-
+  const router = useRouter()
   const [filtro, setFiltro] = useState('todas')
 
   const citasFiltradas = filtro === 'todas'
@@ -25,19 +27,31 @@ export default function CitasClient({ profile, citas, userId }: any) {
 
   const ahora = new Date()
 
-  // ── SEPARAR EN "PRÓXIMAS" (futuras y programadas) E "HISTORIAL" (resto) ──
   const { proximas, historial } = useMemo(() => {
     const prox: any[] = []
     const hist: any[] = []
     citasFiltradas.forEach((c: any) => {
       const fecha = new Date(c.fecha_hora)
-      if (fecha >= ahora && c.estado === 'programada') prox.push(c)
+      if (fecha >= ahora && (c.estado === 'programada' || c.estado === 'pendiente_aprobacion')) prox.push(c)
       else hist.push(c)
     })
     prox.sort((a: any, b: any) => new Date(a.fecha_hora).getTime() - new Date(b.fecha_hora).getTime())
     hist.sort((a: any, b: any) => new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime())
     return { proximas: prox, historial: hist }
   }, [citasFiltradas])
+
+  const ESTADO_LABEL: Record<string, string> = {
+    programada: 'programada',
+    pendiente_aprobacion: 'pendiente de confirmación',
+    completada: 'completada',
+    cancelada: 'cancelada',
+  }
+  const ESTADO_BADGE: Record<string, string> = {
+    programada: 'b-amber',
+    pendiente_aprobacion: 'b-pending',
+    completada: 'b-green',
+    cancelada: 'b-gray',
+  }
 
   function renderCita(c: any, esProxima: boolean) {
     const fecha = new Date(c.fecha_hora)
@@ -60,13 +74,13 @@ export default function CitasClient({ profile, citas, userId }: any) {
           <div className="cita-detalle">
             Sesión de terapia física · {c.duracion_min} min
           </div>
+          {c.estado === 'pendiente_aprobacion' && (
+            <div className="cita-nota-pendiente">⏳ Esperando confirmación de la clínica</div>
+          )}
           {c.notas && <div className="cita-nota">📝 {c.notas}</div>}
         </div>
-        <span className={`badge ${
-          c.estado === 'completada' ? 'b-green' :
-          c.estado === 'programada' ? 'b-amber' : 'b-gray'
-        }`}>
-          {c.estado}
+        <span className={`badge ${ESTADO_BADGE[c.estado] ?? 'b-gray'}`}>
+          {ESTADO_LABEL[c.estado] ?? c.estado}
         </span>
       </div>
     )
@@ -82,7 +96,7 @@ export default function CitasClient({ profile, citas, userId }: any) {
           --border:rgba(255,255,255,0.09);--surface2:rgba(255,255,255,0.07);
           --blue:#2563EB;--cyan:#38BDF8;
           --text:#E7EDF7;--muted:#8C9BB5;
-          --red:#F25555;--amber:#F5B400;--green:#34D399;
+          --red:#F25555;--amber:#F5B400;--green:#34D399;--purple:#A78BFA;
         }
         body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
         .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -95,12 +109,11 @@ export default function CitasClient({ profile, citas, userId }: any) {
         .page-title{font-size:26px;font-weight:800;color:var(--text);letter-spacing:-0.015em;margin-bottom:4px}
         .page-sub{font-size:14px;color:var(--muted);margin-bottom:24px}
 
-        .filtros{display:flex;gap:8px;margin-bottom:26px}
+        .filtros{display:flex;gap:8px;margin-bottom:26px;flex-wrap:wrap}
         .filtro-btn{padding:7px 16px;border-radius:100px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .18s;font-family:'Inter',sans-serif}
         .filtro-btn:hover{border-color:var(--cyan);color:var(--text)}
         .filtro-btn.activo{background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.4);color:var(--cyan)}
 
-        /* ── SECCIONES ── */
         .seccion{margin-bottom:32px}
         .seccion-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
         .seccion-titulo{font-size:15px;font-weight:700;color:var(--text)}
@@ -125,11 +138,13 @@ export default function CitasClient({ profile, citas, userId }: any) {
         .cita-hora{font-size:15px;font-weight:600;color:var(--text)}
         .cita-relativo{font-size:11px;font-weight:700;color:var(--cyan);background:rgba(56,189,248,0.12);padding:2px 9px;border-radius:100px}
         .cita-detalle{font-size:12px;color:var(--muted);margin-top:3px}
+        .cita-nota-pendiente{font-size:11.5px;color:var(--amber);margin-top:5px}
         .cita-nota{font-size:12px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 
         .badge{font-size:11px;font-weight:600;padding:4px 12px;border-radius:100px;flex-shrink:0}
         .b-green{background:rgba(52,211,153,0.15);color:var(--green)}
         .b-amber{background:rgba(245,180,0,0.15);color:var(--amber)}
+        .b-pending{background:rgba(167,139,250,0.15);color:var(--purple)}
         .b-gray{background:var(--surface2);color:var(--muted)}
 
         .empty{text-align:center;padding:40px 0;color:var(--muted);font-size:13px;background:var(--card);border:1px dashed var(--card-border);border-radius:14px}
@@ -150,8 +165,8 @@ export default function CitasClient({ profile, citas, userId }: any) {
           { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon:'📈', label:'Mi Progreso', href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',   href:'/paciente/pagos',     active:false },
+          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon:'⚙️', label:'Mis Datos',   href:'/paciente/perfil',    active:false },
-      
         ]}
       />
 
@@ -169,27 +184,28 @@ export default function CitasClient({ profile, citas, userId }: any) {
 
         <div className="content">
           <div className="page-title">Mis Citas</div>
-          <div className="page-sub">Solo lectura — no puedes crear ni cancelar citas desde aquí</div>
+          <div className="page-sub">Agenda una nueva cita o revisa tu historial</div>
+
+          <AgendarCitaBloques onSolicitudCreada={() => router.refresh()} />
 
           <div className="filtros">
-            {['todas','programada','completada','cancelada'].map(f => (
+            {['todas','programada','pendiente_aprobacion','completada','cancelada'].map(f => (
               <button
                 key={f}
                 className={`filtro-btn ${filtro === f ? 'activo' : ''}`}
                 onClick={() => setFiltro(f)}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === 'todas' ? 'Todas' : ESTADO_LABEL[f] ?? f}
               </button>
             ))}
           </div>
 
           {citasFiltradas.length === 0 ? (
             <div className="empty empty-global">
-              No tienes citas {filtro !== 'todas' ? `con estado "${filtro}"` : 'registradas'}.
+              No tienes citas {filtro !== 'todas' ? `con ese estado` : 'registradas'}.
             </div>
           ) : (
             <>
-              {/* ── PRÓXIMAS CITAS ── */}
               <div className="seccion">
                 <div className="seccion-header">
                   <span className="seccion-titulo">📅 Próximas citas</span>
@@ -197,7 +213,7 @@ export default function CitasClient({ profile, citas, userId }: any) {
                   <span className="seccion-linea" />
                 </div>
                 {proximas.length === 0 ? (
-                  <div className="empty">No tienes próximas citas programadas.</div>
+                  <div className="empty">No tienes próximas citas.</div>
                 ) : (
                   <div className="citas-lista">
                     {proximas.map((c: any) => renderCita(c, true))}
@@ -205,7 +221,6 @@ export default function CitasClient({ profile, citas, userId }: any) {
                 )}
               </div>
 
-              {/* ── HISTORIAL ── */}
               <div className="seccion">
                 <div className="seccion-header hist">
                   <span className="seccion-titulo">🕘 Historial</span>

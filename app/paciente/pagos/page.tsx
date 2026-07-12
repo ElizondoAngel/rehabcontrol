@@ -33,10 +33,27 @@ export default async function MisPagosPage() {
     .eq('paciente_id', idPaciente)
     .order('fecha_pago', { ascending: false })
 
+  // 3. Contrato activo — para la tarjeta de estado del paquete
+  const { data: contratoRaw } = await supabase
+    .from('contratos_paciente')
+    .select('sesiones_totales, sesiones_usadas, sesiones_restantes, monto_pagado, fecha_vencimiento, estado, paquetes(nombre, precio_total)')
+    .eq('paciente_id', idPaciente)
+    .eq('estado', 'activo')
+    .gte('fecha_vencimiento', new Date().toLocaleDateString('en-CA')) // en-CA = formato YYYY-MM-DD
+    .order('fecha_inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const contrato = contratoRaw ? {
+    ...contratoRaw,
+    paquetes: Array.isArray(contratoRaw.paquetes) ? contratoRaw.paquetes[0] ?? null : contratoRaw.paquetes,
+  } : null
+
   return (
     <PagosClient
       profile={profile}
       pagos={pagos ?? []}
+      contrato={contrato}
       userId={user.id}
     />
   )

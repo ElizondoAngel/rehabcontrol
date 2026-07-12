@@ -53,13 +53,24 @@ export default async function PacienteDashboard() {
     .order('fecha_registro', { ascending: false })
     .limit(10)
 
-  // 7. Contrato activo
-  const { data: contrato } = await supabase
+  // 7. Contrato activo — con datos de saldo pendiente y sesiones para la
+  //    tarjeta de estado del paquete.
+  //    NOTA: se corrigió un bug existente aquí — la columna se llama
+  //    'estado' (texto 'activo'/'vencido'/etc.), no 'activo' (booleano).
+  const { data: contratoRaw } = await supabase
     .from('contratos_paciente')
-    .select('sesiones_totales, sesiones_usadas')
+    .select('sesiones_totales, sesiones_usadas, sesiones_restantes, monto_pagado, fecha_vencimiento, estado, paquetes(nombre, precio_total)')
     .eq('paciente_id', idPaciente)
-    .eq('activo', true)
-    .single()
+    .eq('estado', 'activo')
+    .gte('fecha_vencimiento', new Date().toLocaleDateString('en-CA')) // en-CA = formato YYYY-MM-DD
+    .order('fecha_inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const contrato = contratoRaw ? {
+    ...contratoRaw,
+    paquetes: Array.isArray(contratoRaw.paquetes) ? contratoRaw.paquetes[0] ?? null : contratoRaw.paquetes,
+  } : null
 
   return (
     <PacienteDashboardClient
