@@ -537,7 +537,9 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
                 { icon:'🏠', label:'Panel',          href:'/secretaria/dashboard', active:false },
                 { icon:'📅', label:'Agenda General', href:'/secretaria/citas',     active:true },
                 { icon:'👥', label:'Pacientes',       href:'/secretaria/pacientes', active:false },
+                { icon:'📄', label:'Contratos',      href:'/secretaria/contratos', active:false },
                 { icon:'💳', label:'Pagos',           href:'/secretaria/pagos',     active:false },
+                { icon:'🕘', label:'Disponibilidad', href:'/secretaria/disponibilidad', active:false },
               ]}
       />
 
