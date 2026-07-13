@@ -15,14 +15,29 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
+// Extrae la hora del día en zona horaria de México, sin importar en qué
+// zona horaria esté corriendo el servidor (local vs Vercel/UTC). Antes se
+// usaba d.getHours(), que da la hora LOCAL DEL SERVIDOR — en Vercel eso es
+// UTC, así que una cita de las 5:30pm México (23:30 UTC) fallaba la
+// validación de "horario laboral" porque 23 no cae en el rango 8-20.
+function horaEnMexico(d: Date): number {
+  return Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Mexico_City',
+      hour: 'numeric',
+      hour12: false,
+    }).format(d)
+  )
+}
+
 const CitaSchema = z.object({
   paciente_id:  z.number().int().positive(),
   terapeuta_id: z.string().uuid(),
   fecha_hora:   z.string().refine(v => {
     const d = new Date(v)
     if (isNaN(d.getTime())) return false
-    const h = d.getHours()
-    return h >= 8 && h < 20 // horario laboral 08:00-20:00
+    const h = horaEnMexico(d)
+    return h >= 8 && h < 20 // horario laboral 08:00-20:00 (hora de México)
   }, 'Horario fuera de atención (08:00-20:00)'),
   duracion_min: z.number().int().refine(v => [30,45,60,90].includes(v), 'Duración inválida'),
   notas:        z.string().max(500).optional().or(z.literal('')),
