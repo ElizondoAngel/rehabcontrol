@@ -220,6 +220,14 @@ export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerap
           .stats-grid-4{grid-template-columns:repeat(2,1fr)}
           .content-grid{grid-template-columns:1fr}
         }
+        @media(max-width:900px){
+          .stats-grid-3{grid-template-columns:repeat(2,1fr)}
+          .content{padding:24px 20px}
+        }
+        @media(max-width:520px){
+          .stats-grid-3,.stats-grid-2,.stats-grid-4{grid-template-columns:1fr}
+          .stat-num{font-size:22px}
+        }
       `}</style>
 
       {/* SIDEBAR */}
@@ -229,7 +237,7 @@ export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerap
                     subRol="Acceso Total"
                     icono="🛡"
                     items={[
-                      {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:false},
+                    {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:false},
                     {icon:'👥', label:'Usuarios y Roles',    href:'/admin/usuarios',         active:false},
                     {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
                     {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},
