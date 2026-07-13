@@ -48,14 +48,14 @@ const paquetes = [
 ]
 
 const galeria = [
-  { id: 1, img: "/images/consulta-inicial.jpg",       titulo: "Consulta inicial",           terapia: "Evaluación diagnóstica",     duracion: "Primera sesión · sin costo",  desc: "Valoración completa del paciente, historial clínico y definición del plan de tratamiento personalizado." },
-  { id: 2, img: "/images/terapia-hombro.jpg",         titulo: "Terapia de hombro",          terapia: "Rehabilitación ortopédica",  duracion: "5 semanas · 10 sesiones",  desc: "Movilización activa y fortalecimiento en tendinitis de manguito rotador. Resolución completa en 10 sesiones." },
-  { id: 3, img: "/images/terapia-espalda.jpg",        titulo: "Terapia de espalda",         terapia: "Rehabilitación postural",    duracion: "6 semanas · 12 sesiones",  desc: "Reeducación postural global para dolor lumbar crónico. Reducción del dolor de 8/10 a 2/10 en 12 sesiones." },
-  { id: 4, img: "/images/ejercicios-terapeuticos.jpg",titulo: "Ejercicios terapéuticos",    terapia: "Fisioterapia activa",        duracion: "8 semanas · 16 sesiones",  desc: "Ejercicios de resistencia y fortalecimiento progresivo, adaptados a la capacidad de cada paciente." },
-  { id: 5, img: "/images/electroterapia.jpg",         titulo: "Electroterapia",             terapia: "Electroterapia",             duracion: "5 semanas · 10 sesiones",  desc: "Aplicación de TENS y ultrasonido terapéutico para acelerar la recuperación y reducir el dolor." },
-  { id: 6, img: "/images/adulto-mayor.jpg",           titulo: "Rehabilitación geriátrica",  terapia: "Rehabilitación geriátrica", duracion: "10 semanas · 20 sesiones", desc: "Mejora de equilibrio y marcha en adulto mayor. Reducción del riesgo de caídas en un 70%." },
-  { id: 7, img: "/images/rehabilitacion-rodilla.jpg", titulo: "Rehabilitación de rodilla",  terapia: "Rehabilitación ortopédica",  duracion: "8 semanas · 16 sesiones",  desc: "Entrenamiento de marcha con barras paralelas post-cirugía de rodilla. Recuperación completa de la movilidad." },
-  { id: 8, img: "/images/terapia-manual.jpg",         titulo: "Terapia manual",             terapia: "Terapia manual",             duracion: "4 semanas · 8 sesiones",   desc: "Técnicas de terapia manual y liberación miofascial para contracturas y tensión muscular." },
+  { id: 1, img: "/images/galeria/consulta-inicial.jpg",       titulo: "Consulta inicial",           terapia: "Evaluación diagnóstica",     duracion: "Primera sesión · sin costo",  desc: "Valoración completa del paciente, historial clínico y definición del plan de tratamiento personalizado." },
+  { id: 2, img: "/images/galeria/terapia-hombro.jpg",         titulo: "Terapia de hombro",          terapia: "Rehabilitación ortopédica",  duracion: "5 semanas · 10 sesiones",  desc: "Movilización activa y fortalecimiento en tendinitis de manguito rotador. Resolución completa en 10 sesiones." },
+  { id: 3, img: "/images/galeria/terapia-espalda.jpg",        titulo: "Terapia de espalda",         terapia: "Rehabilitación postural",    duracion: "6 semanas · 12 sesiones",  desc: "Reeducación postural global para dolor lumbar crónico. Reducción del dolor de 8/10 a 2/10 en 12 sesiones." },
+  { id: 4, img: "/images/galeria/ejercicios-terapeuticos.jpg",titulo: "Ejercicios terapéuticos",    terapia: "Fisioterapia activa",        duracion: "8 semanas · 16 sesiones",  desc: "Ejercicios de resistencia y fortalecimiento progresivo, adaptados a la capacidad de cada paciente." },
+  { id: 5, img: "/images/galeria/electroterapia.jpg",         titulo: "Electroterapia",             terapia: "Electroterapia",             duracion: "5 semanas · 10 sesiones",  desc: "Aplicación de TENS y ultrasonido terapéutico para acelerar la recuperación y reducir el dolor." },
+  { id: 6, img: "/images/galeria/adulto-mayor.jpg",           titulo: "Rehabilitación geriátrica",  terapia: "Rehabilitación geriátrica", duracion: "10 semanas · 20 sesiones", desc: "Mejora de equilibrio y marcha en adulto mayor. Reducción del riesgo de caídas en un 70%." },
+  { id: 7, img: "/images/galeria/rehabilitacion-rodilla.jpg", titulo: "Rehabilitación de rodilla",  terapia: "Rehabilitación ortopédica",  duracion: "8 semanas · 16 sesiones",  desc: "Entrenamiento de marcha con barras paralelas post-cirugía de rodilla. Recuperación completa de la movilidad." },
+  { id: 8, img: "/images/galeria/terapia-manual.jpg",         titulo: "Terapia manual",             terapia: "Terapia manual",             duracion: "4 semanas · 8 sesiones",   desc: "Técnicas de terapia manual y liberación miofascial para contracturas y tensión muscular." },
 ]
 
 // ── MODAL TERAPEUTA ──────────────────────────────────────────
@@ -969,7 +969,7 @@ export default function LandingPage() {
             <p style={{fontSize:16, color:'var(--muted)', maxWidth:520, margin:'0 auto'}}>Contamos con áreas especializadas y equipos de última generación para ofrecerte la mejor atención.</p>
           </div>
           <div style={{borderRadius:20, overflow:'hidden', marginBottom:40, position:'relative', border:'1px solid var(--border)'}}>
-            <img src="/images/fachada.jpg" alt="Fachada de la clínica Rehabilitandomed" style={{width:'100%', height:320, objectFit:'cover', display:'block'}} />
+            <img src="/images/instalaciones/fachada.jpg" alt="Fachada de la clínica Rehabilitandomed" style={{width:'100%', height:320, objectFit:'cover', display:'block'}} />
             <div style={{position:'absolute', bottom:0, left:0, right:0, background:'linear-gradient(0deg, rgba(6,11,20,0.85), transparent)', padding:'40px 24px 18px'}}>
               <div style={{fontSize:14, fontWeight:600, color:'#fff'}}>Nuestra clínica</div>
               <div style={{fontSize:12.5, color:'rgba(255,255,255,0.7)'}}>Un espacio pensado para tu recuperación, cerca de ti</div>
