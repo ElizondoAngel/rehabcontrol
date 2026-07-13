@@ -526,6 +526,14 @@ export default function CitasClient({ terapeutas, pacientes, citasIniciales , cu
           .cita-row{grid-template-columns:70px 1fr;row-gap:6px}
           .cita-terapeuta, .actions{grid-column:2}
         }
+        @media (max-width: 640px) {
+          .content{padding:18px 16px}
+          .form-grid{grid-template-columns:1fr}
+          .modal-body{padding:18px 20px}
+          .modal-header{padding:18px 20px}
+          .modal-footer{padding:14px 20px; flex-wrap:wrap}
+          .modal-footer button{flex:1}
+        }
       `}</style>
 
       <Sidebar
