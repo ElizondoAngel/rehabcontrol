@@ -137,6 +137,12 @@ export default async function AdminDashboard() {
           .metrics{grid-template-columns:repeat(2,1fr)}
           .tables-grid{grid-template-columns:1fr}
         }
+        .metric-label{padding-right:44px}
+        @media (max-width: 560px) {
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .metrics{grid-template-columns:1fr}
+        }
       `}</style>
 
 
@@ -146,7 +152,7 @@ export default async function AdminDashboard() {
               subRol="Acceso Total"
               icono="🛡"
               items={[
-                {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:true},
+              {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:true},
               {icon:'👥', label:'Usuarios y Roles',    href:'/admin/usuarios',         active:false},
               {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
               {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},

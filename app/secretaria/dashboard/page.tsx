@@ -110,6 +110,18 @@ export default async function SecretariaDashboard() {
         .b-blue{background:rgba(56,189,248,0.15);color:var(--cyan)}
         .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
         .chatbot-bubble:hover{transform:scale(1.08)}
+        .metric-label{padding-right:44px}
+
+        @media (max-width:1000px){
+          .metrics{grid-template-columns:repeat(2,1fr)}
+        }
+        @media (max-width:560px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .metrics{grid-template-columns:1fr}
+          .agenda-row{flex-wrap:wrap; gap:6px}
+          .ag-badges{width:100%; padding-left:64px}
+        }
       `}</style>
 
       <Sidebar
