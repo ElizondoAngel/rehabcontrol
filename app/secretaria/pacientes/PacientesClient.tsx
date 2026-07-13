@@ -345,6 +345,13 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
         .form-group{display:flex;flex-direction:column;gap:6px}
         .form-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.07em;text-transform:uppercase}
         .form-input,.form-select,.form-textarea{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:14px;font-family:'Inter',sans-serif;color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
+        /* Safari/Chrome móvil a veces ignoran el width:100% en el input de
+           fecha de nacimiento, y el widget nativo agrega su propio alto —
+           se lo forzamos aparte. */
+        input[type="date"].form-input{
+          width:100%;max-width:100%;min-width:0;box-sizing:border-box;-webkit-appearance:none;appearance:none;
+          height:46px;padding-top:0;padding-bottom:0;line-height:46px;
+        }
         .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(56,189,248,0.12)}
         .form-input::placeholder,.form-textarea::placeholder{color:rgba(231,237,247,0.25)}
         .form-select option{background:#0A1220;color:var(--text)}
