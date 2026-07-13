@@ -77,6 +77,19 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
         .empty{text-align:center;padding:60px 0;color:var(--muted);font-size:14px}
         .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
         .chatbot-bubble:hover{transform:scale(1.08)}
+
+        @media (max-width:900px){
+          .stats{grid-template-columns:repeat(2,1fr)}
+        }
+        @media (max-width:560px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .motivacion{padding:16px 18px; gap:12px}
+          .motiv-emoji{font-size:26px}
+          .stats{grid-template-columns:1fr}
+          .sesion-stats{flex-wrap:wrap; gap:14px 20px}
+          .sesion-top{flex-wrap:wrap; gap:4px}
+        }
       `}</style>
 
       <Sidebar

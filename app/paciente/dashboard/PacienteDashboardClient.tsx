@@ -108,6 +108,7 @@ export default function PacienteDashboardClient({
           .progress-stats{grid-template-columns:1fr; gap:8px}
           .metric{padding:18px 20px}
           .metric-icon{width:30px; height:30px; font-size:14px; top:16px; right:16px}
+          .bottom-grid{grid-template-columns:1fr}
         }
       `}</style>
 
