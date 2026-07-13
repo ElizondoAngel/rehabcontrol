@@ -98,6 +98,17 @@ export default function PacienteDashboardClient({
         .chatbot-bubble{position:fixed;bottom:28px;right:28px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,0.4);transition:transform .2s;z-index:50;text-decoration:none}
         .chatbot-bubble:hover{transform:scale(1.08)}
         .empty{font-size:13px;color:var(--muted);padding:12px 0}
+
+        /* ── MÓVIL — evita que el ícono flotante se encime con el texto ── */
+        .metric-label{padding-right:44px}
+        @media (max-width:640px){
+          .content{padding:20px 16px}
+          .page-title{font-size:22px}
+          .metrics{grid-template-columns:1fr; gap:12px}
+          .progress-stats{grid-template-columns:1fr; gap:8px}
+          .metric{padding:18px 20px}
+          .metric-icon{width:30px; height:30px; font-size:14px; top:16px; right:16px}
+        }
       `}</style>
 
       <Sidebar
@@ -108,10 +119,8 @@ export default function PacienteDashboardClient({
         items={[
           { icon:'🏠', label:'Mi Inicio',   href:'/paciente/dashboard', active:true  },
           { icon:'📅', label:'Mis Citas',   href:'/paciente/citas',     active:false },
-          { icon:'🏋️', label:'Mis Ejercicios', href:'/paciente/ejercicios', active:false },
           { icon:'📈', label:'Mi Progreso', href:'/paciente/progreso',  active:false },
           { icon:'💳', label:'Mis Pagos',   href:'/paciente/pagos',     active:false },
-          { icon:'⭐', label:'Mis Opiniones',   href:'/paciente/opiniones', active:false },
           { icon:'⚙️', label:'Mis Datos',   href:'/paciente/perfil',    active:false },
         ]}
       />
