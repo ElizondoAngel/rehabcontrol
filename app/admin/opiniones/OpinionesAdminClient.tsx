@@ -66,7 +66,7 @@ export default function OpinionesAdminClient({ userId, nombre }: Props) {
         .content{flex:1;overflow-y:auto;padding:28px}
         .page-title{font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px}
         .page-sub{font-size:14px;color:var(--muted);margin-bottom:24px}
-        .filtros{display:flex;gap:8px;margin-bottom:24px}
+        .filtros{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap}
         .filtro-btn{padding:7px 16px;border-radius:100px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif}
         .filtro-btn.activo{background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.4);color:var(--cyan)}
         .op-card{background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:18px 20px;margin-bottom:12px}
@@ -79,6 +79,13 @@ export default function OpinionesAdminClient({ userId, nombre }: Props) {
         .btn-ok{background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);color:var(--green);border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
         .btn-no{background:rgba(242,85,85,0.10);border:1px solid rgba(242,85,85,0.3);color:var(--red);border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
         .empty{text-align:center;padding:48px 0;color:var(--muted);font-size:14px}
+
+        @media (max-width:640px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .op-actions{width:100%}
+          .op-actions button{flex:1}
+        }
       `}</style>
 
       <Sidebar

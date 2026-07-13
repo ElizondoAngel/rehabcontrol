@@ -110,6 +110,13 @@ export default function ContratosClient({ paquetes, contratosIniciales, userId, 
         .b-red{background:rgba(242,85,85,0.15);color:var(--red)}
         .b-amber{background:rgba(245,180,0,0.15);color:var(--amber)}
         .empty{color:var(--muted);font-size:13px;text-align:center;padding:40px}
+
+        @media (max-width:640px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .btn-nuevo{width:100%}
+          .form-row-2{grid-template-columns:1fr !important}
+        }
       `}</style>
 
       <Sidebar
@@ -226,7 +233,7 @@ export default function ContratosClient({ paquetes, contratosIniciales, userId, 
               setToast({ msg: 'Abono registrado correctamente', type:'success' })
               setModalAbonar(null)
             }} noValidate>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+              <div className="form-row-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:7}}>MONTO ($) *</label>
                   <input name="monto" type="number" min="0" step="0.01"
@@ -342,7 +349,7 @@ export default function ContratosClient({ paquetes, contratosIniciales, userId, 
               </div>
               {incluirPagoInicial && (
                 <>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+                  <div className="form-row-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
                     <div>
                       <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:7}}>MONTO ($) *</label>
                       <input name="pago_monto" type="number" min="0" step="0.01" defaultValue={paqueteSeleccionado ? paqueteSeleccionado.precio_total : ''}
@@ -370,7 +377,7 @@ export default function ContratosClient({ paquetes, contratosIniciales, userId, 
                   </div>
                 </>
               )}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
+              <div className="form-row-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:7}}>FECHA INICIO *</label>
                   <input name="fecha_inicio" type="date" defaultValue={new Date().toISOString().slice(0,10)}

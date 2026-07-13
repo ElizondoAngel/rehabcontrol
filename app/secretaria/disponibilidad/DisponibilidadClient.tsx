@@ -131,6 +131,15 @@ export default function DisponibilidadClient({ terapeutas, userId, nombre, rol =
         .btn-guardar:disabled{opacity:0.5;cursor:not-allowed}
         .estado-msg{color:var(--muted);font-size:13px;padding:20px 0}
         .toast{position:fixed;bottom:28px;right:28px;z-index:200;background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:14px 18px;font-size:13.5px;display:flex;align-items:center;gap:12}
+
+        @media (max-width:640px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .select-terapeuta{max-width:100%}
+          .dia-row{flex-wrap:wrap}
+          .dia-horas{width:100%; margin-left:34px; flex-basis:100%}
+          .btn-guardar{width:100%}
+        }
       `}</style>
 
       <Sidebar

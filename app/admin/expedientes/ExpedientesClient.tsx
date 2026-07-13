@@ -282,6 +282,20 @@ export default function ExpedientesClient({ pacientesIniciales, currentUserRol, 
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+        @media (max-width:900px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          /* En móvil, lista y detalle se apilan en vez de ir lado a lado */
+          .exp-layout{grid-template-columns:1fr; height:auto}
+          .lista-panel{max-height:340px}
+          .detalle-panel{min-height:400px}
+          .metricas-row{grid-template-columns:repeat(2,1fr)}
+          .tabs-row{overflow-x:auto; flex-wrap:nowrap}
+          .tab-btn{white-space:nowrap}
+          .info-grid{grid-template-columns:1fr}
+          .form-grid-2{grid-template-columns:1fr}
+        }
       `}</style>
 
       {/* SIDEBAR */}
