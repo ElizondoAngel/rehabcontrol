@@ -8,7 +8,7 @@ interface ChatMsg {
   text: string
   time: string
   fileName?: string
-  histIndex?: number // posición en history.current — permite editar y truncar desde ahí
+  histIndex?: number
 }
 interface MsgHist { role: 'user' | 'assistant'; content: string }
 
@@ -31,8 +31,6 @@ const BIENVENIDA: Record<string, string> = {
   paciente:   '¡Hola! 👋 Soy RehabControl AI. Puedo ayudarte a reportar cómo te sientes para tu terapeuta y resolver dudas generales. Para agendar una cita, contacta a la secretaria.',
 }
 
-// Acento de color distinto por rol — misma base oscura, distinta identidad
-// (NO SE TOCA — se deja exactamente igual, así les gusta)
 const ACENTOS: Record<string, { from: string; to: string; glow: string; chip: string }> = {
   admin:      { from: '#B45309', to: '#F59E0B', glow: 'rgba(245,158,11,0.5)', chip: '#F59E0B' },
   secretaria: { from: '#6D28D9', to: '#A78BFA', glow: 'rgba(167,139,250,0.5)', chip: '#A78BFA' },
@@ -40,19 +38,23 @@ const ACENTOS: Record<string, { from: string; to: string; glow: string; chip: st
   paciente:   { from: '#2563EB', to: '#38BDF8', glow: 'rgba(56,189,248,0.5)', chip: '#38BDF8' },
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// FUNCIONALIDAD HABILITADA (antes solo admin/terapeuta tenían adjuntar, y
-// solo terapeuta tenía pausar). Ahora AMBAS funciones están activas para
-// LOS 4 ROLES: admin 🟠, secretaria 🟣, terapeuta 🟢, paciente 🔵.
-// Si en el futuro quieres restringir alguna, solo quita el rol de la lista.
-// ─────────────────────────────────────────────────────────────────────────
-
-// Roles que pueden adjuntar documentos (imagen, PDF, txt, csv) al chat
-// paciente NO adjunta — solo admin, secretaria y terapeuta
 const PUEDE_ADJUNTAR = ['admin', 'secretaria', 'terapeuta']
-
-// Roles que pueden pausar su mensaje antes de enviarlo (para editarlo/revisarlo)
-const PUEDE_PAUSAR = ['admin', 'secretaria', 'terapeuta', 'paciente']
+const PUEDE_PAUSAR   = ['admin', 'secretaria', 'terapeuta', 'paciente']
+function limpiarMarkdown(texto: string): string {
+  return texto
+    .replace(/^#{1,6}\s+(.+)$/gm, '\n$1\n')
+    .replace(/\*\*([\s\S]+?)\*\*/g, '$1')
+    .replace(/__([\s\S]+?)__/g, '$1')
+    .replace(/\*([^*\n]+?)\*/g, '$1')
+    .replace(/_([^_\n]+?)_/g, '$1')
+    .replace(/^[\*\-]\s+/gm, '• ')
+    .replace(/^\s{2,4}[\*\-]\s+/gm, '  · ')
+    .replace(/^-{3,}$/gm, '')
+    .replace(/```[\w]*\n?([\s\S]*?)```/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
 
 function hora(iso?: string) {
   return new Date(iso ?? Date.now()).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
@@ -80,38 +82,35 @@ function getMime(file: File): string {
 }
 
 export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Props) {
-  const [open,       setOpen]       = useState(false)
-  const [notif,      setNotif]      = useState(true)
-  const [input,      setInput]      = useState('')
-  const [loading,    setLoading]    = useState(false)
+  const [open,        setOpen]        = useState(false)
+  const [notif,       setNotif]       = useState(true)
+  const [input,       setInput]       = useState('')
+  const [loading,     setLoading]     = useState(false)
   const [loadingHist, setLoadingHist] = useState(true)
-  const [paused,     setPaused]     = useState(false)
-  const [showSugs,   setShowSugs]   = useState(true)
-  const [adjunto,    setAdjunto]    = useState<File | null>(null)
-  const [adjPreview, setAdjPreview] = useState<string | null>(null)
-  const [messages,   setMessages]   = useState<ChatMsg[]>([])
-  const [editingId,  setEditingId]  = useState<string | null>(null) // id del mensaje que se está editando
-  const [editText,   setEditText]   = useState('')
+  const [paused,      setPaused]      = useState(false)
+  const [showSugs,    setShowSugs]    = useState(true)
+  const [adjunto,     setAdjunto]     = useState<File | null>(null)
+  const [adjPreview,  setAdjPreview]  = useState<string | null>(null)
+  const [messages,    setMessages]    = useState<ChatMsg[]>([])
+  const [editingId,   setEditingId]   = useState<string | null>(null)
+  const [editText,    setEditText]    = useState('')
 
-  const acento    = ACENTOS[rol] ?? ACENTOS.paciente
-  const history   = useRef<MsgHist[]>([])
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const fileRef   = useRef<HTMLInputElement>(null)
-  const puedeAdj    = PUEDE_ADJUNTAR.includes(rol) // 📎 adjuntar archivo — habilitado para los 4 roles
-  const puedePausar = PUEDE_PAUSAR.includes(rol)   // ⏸ pausar mensaje — habilitado para los 4 roles
-  const yaCargado = useRef(false)
+  const acento      = ACENTOS[rol] ?? ACENTOS.paciente
+  const history     = useRef<MsgHist[]>([])
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const fileRef     = useRef<HTMLInputElement>(null)
+  const puedeAdj    = PUEDE_ADJUNTAR.includes(rol)
+  const puedePausar = PUEDE_PAUSAR.includes(rol)
+  const yaCargado   = useRef(false)
 
-  // ── Cargar historial guardado al montar (se queda la info entre sesiones) ──
   useEffect(() => {
     if (yaCargado.current) return
     yaCargado.current = true
     ;(async () => {
       try {
-        const res = await fetch('/api/chatbot')
+        const res  = await fetch('/api/chatbot')
         const data = await res.json()
-        if (!res.ok) {
-          console.error('Error cargando historial del chat:', data.error)
-        }
+        if (!res.ok) console.error('Error cargando historial del chat:', data.error)
         const historial = data.historial as { role: 'user' | 'assistant'; content: string; created_at: string }[]
         if (historial?.length) {
           history.current = historial.map(h => ({ role: h.role, content: h.content }))
@@ -152,8 +151,6 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     e.target.value = ''
   }
 
-  // Al pausar, el texto se queda tal cual en el input (ya NO se borra),
-  // así el usuario lo puede editar directo en el campo antes de reanudar.
   function pausar() {
     if (!input.trim() || loading) return
     setPaused(true)
@@ -163,12 +160,8 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     }])
   }
 
-  function reanudar() {
-    setPaused(false)
-  }
+  function reanudar() { setPaused(false) }
 
-  // ✎ Editar un mensaje que YA se envió (como editar un mensaje tuyo en un chat):
-  // se abre el campo de edición justo en esa burbuja.
   function iniciarEdicion(id: string, textoActual: string) {
     setEditingId(id)
     setEditText(textoActual)
@@ -179,13 +172,10 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     setEditText('')
   }
 
-  // Al guardar: se borra ese mensaje y todo lo que venía después (igual que
-  // editar un mensaje en un chat normal), y se reenvía el texto editado.
   function guardarEdicion(id: string, histIndex?: number) {
     if (!editText.trim() || histIndex === undefined) { cancelarEdicion(); return }
     const idxMsg = messages.findIndex(m => m.id === id)
     if (idxMsg === -1) { cancelarEdicion(); return }
-
     const textoEditado = editText
     setMessages(p => p.slice(0, idxMsg))
     history.current = history.current.slice(0, histIndex)
@@ -202,7 +192,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
     setShowSugs(false)
 
     const textoMostrar = text.trim() || `📎 ${adjunto?.name}`
-    const idx = history.current.length // posición que este mensaje ocupará en history.current
+    const idx = history.current.length
     setMessages(p => [...p, {
       id: Date.now().toString(), role: 'user',
       text: textoMostrar, time: hora(),
@@ -230,7 +220,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
         body: JSON.stringify({ messages: newHist, modulo, file: fileData }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data  = await res.json()
       const reply: string = data.reply ?? 'Sin respuesta. Intenta de nuevo.'
       history.current = [...newHist, { role: 'assistant', content: reply }]
       setMessages(p => [...p, { id: (Date.now() + 1).toString(), role: 'bot', text: reply, time: hora() }])
@@ -272,7 +262,12 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: '#E7EDF7', margin: 0 }}>RehabControl AI</p>
               <p style={{ fontSize: 11, color: acento.chip, margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: paused ? '#F5B400' : acento.chip, display: 'inline-block', boxShadow: `0 0 6px ${paused ? '#F5B400' : acento.chip}` }} />
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: paused ? '#F5B400' : acento.chip,
+                  display: 'inline-block',
+                  boxShadow: `0 0 6px ${paused ? '#F5B400' : acento.chip}`,
+                }} />
                 {paused ? 'En pausa' : 'En línea'} · {rol}
               </p>
             </div>
@@ -298,6 +293,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
             {loadingHist && (
               <p style={{ fontSize: 11, color: '#8C9BB5', textAlign: 'center' }}>Cargando conversación…</p>
             )}
+
             {messages.map(m => (
               <div key={m.id} style={{
                 maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 3,
@@ -308,8 +304,8 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                     📎 {m.fileName}
                   </div>
                 )}
+
                 {editingId === m.id ? (
-                  // ✎ Modo edición — reemplaza la burbuja mientras se edita este mensaje
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
                     <input
                       value={editText}
@@ -336,8 +332,10 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                   </div>
                 ) : (
                   <div style={{
-                    padding: '8px 12px', fontSize: 13, lineHeight: 1.6,
-                    whiteSpace: 'pre-wrap', borderRadius: 12,
+                    padding: '8px 12px', fontSize: 13, lineHeight: 1.65,
+                    // ── whiteSpace: pre-wrap para respetar saltos de línea ──
+                    whiteSpace: 'pre-wrap',
+                    borderRadius: 12,
                     borderBottomLeftRadius:  m.role === 'bot'  ? 3 : 12,
                     borderBottomRightRadius: m.role === 'user' ? 3 : 12,
                     background: m.role === 'user'
@@ -346,14 +344,15 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                     color: '#E7EDF7',
                     border: m.role === 'bot' ? '1px solid rgba(255,255,255,0.09)' : 'none',
                   }}>
-                    {m.text}
+                    {/* ── ÚNICO CAMBIO: bot usa limpiarMarkdown, usuario muestra texto directo ── */}
+                    {m.role === 'bot' ? limpiarMarkdown(m.text) : m.text}
                   </div>
                 )}
+
                 <p style={{
                   fontSize: 10, color: '#8C9BB5', margin: 0, display: 'flex', alignItems: 'center', gap: 6,
                   justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
                 }}>
-                  {/* ✎ Editar — solo en mensajes propios del usuario ya enviados, no mientras carga respuesta */}
                   {m.role === 'user' && editingId !== m.id && m.histIndex !== undefined && !loading && (
                     <span onClick={() => iniciarEdicion(m.id, m.text)} style={{ cursor: 'pointer', color: acento.chip }}>✎ editar</span>
                   )}
@@ -422,7 +421,6 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
             background: '#060B14', flexShrink: 0,
           }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {/* 📎 Botón de adjuntar — visible para admin, secretaria, terapeuta y paciente */}
               {puedeAdj && (
                 <>
                   <input ref={fileRef} type="file"
@@ -461,7 +459,6 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 }}
               />
 
-              {/* ⏸ Botón de pausar — visible para admin, secretaria, terapeuta y paciente */}
               {puedePausar && !paused && (
                 <button type="button" onClick={pausar} disabled={!input.trim() || loading}
                   title="Pausar y analizar antes de enviar"
@@ -475,7 +472,6 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                   }}>⏸</button>
               )}
 
-              {/* ▶ Botón de reanudar — aparece para cualquier rol que haya pausado un mensaje */}
               {paused && (
                 <button type="button" onClick={reanudar}
                   title="Reanudar mensaje pausado"
@@ -502,7 +498,6 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 }}>➤</button>
             </div>
 
-            {/* Leyenda de botones — ahora visible para los 4 roles, no solo terapeuta */}
             {puedePausar && (
               <p style={{ fontSize: 10, color: '#8C9BB5', margin: 0, textAlign: 'center' }}>
                 ⏸ Pausa para revisar · ▶ Reanuda · ➤ Envía
@@ -512,7 +507,7 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
         </div>
       )}
 
-      {/* Burbuja — el color cambia según el rol (ACENTOS), tal cual la tenías */}
+      {/* Burbuja */}
       <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 9998 }}>
         <button type="button" onClick={toggle} style={{
           width: 52, height: 52, borderRadius: '50%', border: 'none', cursor: 'pointer',
