@@ -381,6 +381,17 @@ export default function PacientesClient({ terapeutas, pacientesIniciales, userNo
         @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
         @keyframes spin    { to{transform:rotate(360deg)} }
         @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+        @media (max-width:900px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          .stats-row{grid-template-columns:1fr}
+          /* Tabla de 5 columnas: se desliza horizontal en vez de apachurrarse */
+          .table-card, .table-scroll{overflow-x:auto}
+          .table-header-row, .patient-row{min-width:640px}
+          /* Formulario de "Registrar paciente" — 2 columnas a 1 */
+          .form-grid{grid-template-columns:1fr}
+        }
       `}</style>
 
       <Sidebar

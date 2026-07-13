@@ -133,6 +133,14 @@ export default function SolicitudesBajaClient({ solicitudesIniciales, adminNombr
         .toast-ok{background:rgba(52,211,153,0.12);color:var(--green);border:1px solid rgba(52,211,153,0.3)}
         .toast-err{background:rgba(242,85,85,0.12);color:var(--red);border:1px solid rgba(242,85,85,0.3)}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+        @media (max-width:900px){
+          .content{padding:18px 16px}
+          .page-title{font-size:22px}
+          /* Tabla de 5 columnas: en vez de apachurrarla, se desliza horizontal */
+          .table-card{overflow-x:auto}
+          .t-head, .t-row{min-width:640px}
+        }
       `}</style>
 
       <Sidebar
@@ -141,7 +149,7 @@ export default function SolicitudesBajaClient({ solicitudesIniciales, adminNombr
                     subRol="Acceso Total"
                     icono="🛡"
                     items={[
-                      {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:false},
+                    {icon:'🏠', label:'Panel General',       href:'/admin/dashboard',        active:false},
                     {icon:'👥', label:'Usuarios y Roles',    href:'/admin/usuarios',         active:false},
                     {icon:'📋', label:'Expedientes',          href:'/admin/expedientes',      active:false},
                     {icon:'💳', label:'Finanzas',             href:'/admin/finanzas',         active:false},
