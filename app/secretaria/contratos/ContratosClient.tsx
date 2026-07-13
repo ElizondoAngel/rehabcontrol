@@ -48,6 +48,18 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success'|'error'; o
   )
 }
 
+// Da la fecha de HOY (o +N días) en formato YYYY-MM-DD usando componentes
+// LOCALES del navegador — evita el bug de .toISOString(), que convierte a
+// UTC y puede adelantar un día completo si es de noche en México.
+function fechaLocalHoy(masDias = 0) {
+  const d = new Date()
+  d.setDate(d.getDate() + masDias)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dia}`
+}
+
 export default function ContratosClient({ paquetes, contratosIniciales, userId, nombre }: Props) {
   const [contratos, setContratos] = useState<Contrato[]>(contratosIniciales)
   const [toast, setToast] = useState<{msg:string;type:'success'|'error'}|null>(null)
@@ -380,14 +392,14 @@ export default function ContratosClient({ paquetes, contratosIniciales, userId, 
               <div className="form-row-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:7}}>FECHA INICIO *</label>
-                  <input name="fecha_inicio" type="date" defaultValue={new Date().toISOString().slice(0,10)}
-                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_inicio?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,color:'var(--text)',outline:'none'}} />
+                  <input name="fecha_inicio" type="date" defaultValue={fechaLocalHoy()}
+                    style={{width:'100%',maxWidth:'100%',minWidth:0,boxSizing:'border-box',WebkitAppearance:'none',height:46,paddingTop:0,paddingBottom:0,lineHeight:'46px',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_inicio?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,paddingLeft:13,paddingRight:13,fontSize:14,color:'var(--text)',outline:'none'}} />
                   {erroresContrato.fecha_inicio && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.fecha_inicio}</span>}
                 </div>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:600,color:'var(--muted)',marginBottom:7}}>FECHA VENCIMIENTO *</label>
-                  <input name="fecha_vencimiento" type="date" defaultValue={new Date(Date.now()+90*86400000).toISOString().slice(0,10)}
-                    style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_vencimiento?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,padding:'11px 13px',fontSize:14,color:'var(--text)',outline:'none'}} />
+                  <input name="fecha_vencimiento" type="date" defaultValue={fechaLocalHoy(90)}
+                    style={{width:'100%',maxWidth:'100%',minWidth:0,boxSizing:'border-box',WebkitAppearance:'none',height:46,paddingTop:0,paddingBottom:0,lineHeight:'46px',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${erroresContrato.fecha_vencimiento?'rgba(242,85,85,0.5)':'var(--border)'}`,borderRadius:10,paddingLeft:13,paddingRight:13,fontSize:14,color:'var(--text)',outline:'none'}} />
                   {erroresContrato.fecha_vencimiento && <span style={{fontSize:11,color:'var(--red)'}}>{erroresContrato.fecha_vencimiento}</span>}
                 </div>
               </div>
