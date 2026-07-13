@@ -1,9 +1,12 @@
 /**
  * /api/opiniones/publicas/route.ts
  * GET — opiniones APROBADAS para mostrar en el landing público.
- * No requiere sesión (usa el cliente normal de Supabase; RLS ya
- * tiene la policy 'opiniones_publico_aprobadas' que solo deja leer
- * las de estado='aprobada' al rol 'anon').
+ *
+ * Usa la función SQL `get_opiniones_publicas()` (SECURITY DEFINER)
+ * en vez de un select con embeds a pacientes/profiles: los embeds
+ * disparaban el RLS de esas tablas, que a su vez referenciaba a
+ * `opiniones`, causando "infinite recursion detected in policy".
+ * La función bypassea ese ciclo y solo expone los 4 campos públicos.
  */
 
 import { createClient } from '@/lib/supabase/server'
@@ -13,16 +16,7 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
-    const { data, error } = await supabase
-      .from('opiniones')
-      .select(`
-        id_opinion, calificacion, comentario, created_at,
-        pacientes(nombre_completo),
-        profiles!opiniones_terapeuta_id_fkey(nombre_completo)
-      `)
-      .eq('estado', 'aprobada')
-      .order('created_at', { ascending: false })
-      .limit(12)
+    const { data, error } = await supabase.rpc('get_opiniones_publicas')
 
     if (error) {
       console.error('Error al listar opiniones públicas:', JSON.stringify(error, null, 2))
@@ -32,8 +26,8 @@ export async function GET() {
     const normalizadas = (data ?? []).map((o: any) => ({
       calificacion: o.calificacion,
       comentario: o.comentario,
-      paciente_nombre: (Array.isArray(o.pacientes) ? o.pacientes[0] : o.pacientes)?.nombre_completo ?? 'Paciente',
-      terapeuta_nombre: (Array.isArray(o.profiles) ? o.profiles[0] : o.profiles)?.nombre_completo ?? null,
+      paciente_nombre: o.paciente_nombre ?? 'Paciente',
+      terapeuta_nombre: o.terapeuta_nombre ?? null,
     }))
 
     return NextResponse.json({ opiniones: normalizadas })
