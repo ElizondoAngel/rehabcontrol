@@ -2,7 +2,7 @@
 
 Sistema web seguro de gestión clínica para rehabilitación física, desarrollado para **Rehabilitandomed**.
 
-**Stack:** Next.js 15 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth + RLS)
+**Stack:** Next.js 15 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth + RLS) · Nodemailer (Gmail SMTP) · Google Gemini · Vercel
 
 🔗 **Demo en producción:** [rehabcontrol.vercel.app](https://rehabcontrol.vercel.app)
 
@@ -147,16 +147,20 @@ Proyecto desarrollado con **Scrum**, en 4 sprints de 2 semanas cada uno.
 | Sprint 3 | 14 – 27 octubre 2026 | Opiniones, notificaciones y reportes |
 | Sprint 4 | 28 octubre – 20 noviembre 2026 | Chatbot IA, landing final e integración |
 
+**Planeación:** tablero en [GitHub Projects](https://github.com/users/ElizondoAngel/projects/1) con una historia de usuario por issue, un milestone por sprint y los campos Story Points y Responsable.
+
 > **Fecha de inicio del proyecto:** 16 de septiembre de 2026
 > **Fecha de término:** 20 de noviembre de 2026
 
 ## Equipo
 
-- Butanda Montero Giovani — Developer
-- Elizondo Sandoval Ángel Eduardo — Scrum Master / Líder
-- Valverde Sánchez Felix Marlon — Developer
+| Integrante | Rol | Módulos principales |
+|---|---|---|
+| Butanda Montero Giovani | Developer | Módulo de Paciente (agendado y notificaciones), reportes |
+| Elizondo Sandoval Ángel Eduardo | Scrum Master / Líder | Autenticación, correos, opiniones, chatbot e integración a main |
+| Valverde Sánchez Felix Marlon | Developer | Expedientes clínicos, contratos y pagos, aprobación de citas, landing |
 
-**Grupo:** ITIC-902M · UTN · 2025-2026
+**Grupo:** ITIC-902M · UTN · 2026
 
 ## Licencia
 
