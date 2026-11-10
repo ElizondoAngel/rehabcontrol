@@ -39,6 +39,70 @@ interface Props {
   logoutHref?: string
 }
 
+interface SidebarRoleTheme {
+  from: string
+  to: string
+  accent: string
+  iconBg: string
+  iconBorder: string
+  cardBorder: string
+  cardBg: string
+  activeBg: string
+  activeBorder: string
+  glow: string
+}
+
+const TEMAS_SIDEBAR: Record<string, SidebarRoleTheme> = {
+  paciente: {
+    from: '#2563EB',
+    to: '#38BDF8',
+    accent: '#38BDF8',
+    iconBg: 'rgba(56, 189, 248, 0.16)',
+    iconBorder: 'rgba(56, 189, 248, 0.42)',
+    cardBorder: 'rgba(56, 189, 248, 0.25)',
+    cardBg: 'rgba(37, 99, 235, 0.08)',
+    activeBg: 'linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(56, 189, 248, 0.14))',
+    activeBorder: 'rgba(56, 189, 248, 0.28)',
+    glow: 'rgba(56, 189, 248, 0.32)',
+  },
+  terapeuta: {
+    from: '#0D9488',
+    to: '#2DD4BF',
+    accent: '#2DD4BF',
+    iconBg: 'rgba(45, 212, 191, 0.16)',
+    iconBorder: 'rgba(45, 212, 191, 0.42)',
+    cardBorder: 'rgba(45, 212, 191, 0.25)',
+    cardBg: 'rgba(13, 148, 136, 0.08)',
+    activeBg: 'linear-gradient(135deg, rgba(13, 148, 136, 0.22), rgba(45, 212, 191, 0.14))',
+    activeBorder: 'rgba(45, 212, 191, 0.28)',
+    glow: 'rgba(45, 212, 191, 0.32)',
+  },
+  secretaria: {
+    from: '#6D28D9',
+    to: '#A78BFA',
+    accent: '#A78BFA',
+    iconBg: 'rgba(167, 139, 250, 0.16)',
+    iconBorder: 'rgba(167, 139, 250, 0.42)',
+    cardBorder: 'rgba(167, 139, 250, 0.25)',
+    cardBg: 'rgba(109, 40, 217, 0.08)',
+    activeBg: 'linear-gradient(135deg, rgba(109, 40, 217, 0.22), rgba(167, 139, 250, 0.14))',
+    activeBorder: 'rgba(167, 139, 250, 0.28)',
+    glow: 'rgba(167, 139, 250, 0.32)',
+  },
+  admin: {
+    from: '#B45309',
+    to: '#F59E0B',
+    accent: '#FBBF24',
+    iconBg: 'rgba(245, 158, 11, 0.16)',
+    iconBorder: 'rgba(245, 158, 11, 0.42)',
+    cardBorder: 'rgba(245, 158, 11, 0.25)',
+    cardBg: 'rgba(180, 83, 9, 0.08)',
+    activeBg: 'linear-gradient(135deg, rgba(180, 83, 9, 0.22), rgba(245, 158, 11, 0.14))',
+    activeBorder: 'rgba(251, 191, 36, 0.28)',
+    glow: 'rgba(245, 158, 11, 0.32)',
+  },
+}
+
 export function useMenuToggle() {
   return () => window.dispatchEvent(new CustomEvent('sidebar-toggle'))
 }
@@ -46,6 +110,7 @@ export function useMenuToggle() {
 export default function Sidebar({ rol, nombre, subRol, icono, items, logoutHref = '/login' }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const tema = TEMAS_SIDEBAR[rol] ?? TEMAS_SIDEBAR.paciente
 
   // Cerrar al hacer click fuera en móvil
   useEffect(() => {
@@ -80,7 +145,15 @@ export default function Sidebar({ rol, nombre, subRol, icono, items, logoutHref 
         </div>
       </div>
       <div className="sb-role">
-        <div className="sb-role-icon">{icono}</div>
+        <div className="sb-role-icon">
+          {icono === '👤' ? (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" style={{ color: tema.accent }}>
+              <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm0 2c-3.33 0-10 1.67-10 5v2c0 .55.45 1 1 1h18c.55 0 1-.45 1-1v-2c0-3.33-6.67-5-10-5z" />
+            </svg>
+          ) : (
+            icono
+          )}
+        </div>
         <div>
           <div className="sb-role-name">{nombre}</div>
           <div className="sb-role-sub">{subRol}</div>
@@ -147,20 +220,20 @@ export default function Sidebar({ rol, nombre, subRol, icono, items, logoutHref 
 
         @keyframes overlayFade { from{opacity:0} to{opacity:1} }
 
-        /* ── ESTILOS INTERNOS DEL SIDEBAR ── */
+        /* ── ESTILOS INTERNOS DEL SIDEBAR (ACORDE AL ROL DEL CHATBOT) ── */
         .sb-brand{padding:20px 20px 16px;border-bottom:1px solid var(--border,rgba(255,255,255,0.09))}
         .sb-logo-row{display:flex;align-items:center;gap:10px}
-        .sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--blue,#2563EB),var(--cyan,#38BDF8));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;box-shadow:0 0 18px rgba(56,189,248,0.3);flex-shrink:0}
+        .sb-logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,${tema.from},${tema.to});display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;box-shadow:0 0 18px ${tema.glow};flex-shrink:0}
         .sb-name{font-size:14px;font-weight:700;color:var(--text,#E7EDF7);letter-spacing:-0.01em}
         .sb-ver{font-size:10px;color:var(--muted,#8C9BB5)}
-        .sb-role{margin:12px 12px 4px;background:var(--card,rgba(255,255,255,0.035));border:1px solid var(--border,rgba(255,255,255,0.09));border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
-        .sb-role-icon{width:32px;height:32px;border-radius:9px;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.28);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+        .sb-role{margin:12px 12px 4px;background:${tema.cardBg};border:1px solid ${tema.cardBorder};border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px}
+        .sb-role-icon{width:34px;height:34px;border-radius:9px;background:${tema.iconBg};border:1.5px solid ${tema.iconBorder};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;color:${tema.accent}}
         .sb-role-name{font-size:13px;font-weight:600;color:var(--text,#E7EDF7)}
-        .sb-role-sub{font-size:11px;color:var(--purple,#A78BFA)}
+        .sb-role-sub{font-size:11px;font-weight:600;color:${tema.accent}}
         .sb-nav{flex:1;padding:8px 10px;overflow-y:auto}
         .sb-nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted,#8C9BB5);text-decoration:none;transition:all .18s;margin-bottom:2px}
         .sb-nav a:hover{background:var(--surface2,rgba(255,255,255,0.07));color:var(--text,#E7EDF7)}
-        .sb-nav a.active{background:linear-gradient(135deg,rgba(37,99,235,0.18),rgba(56,189,248,0.12));color:var(--cyan,#38BDF8);box-shadow:inset 0 0 0 1px rgba(56,189,248,0.2)}
+        .sb-nav a.active{background:${tema.activeBg};color:${tema.accent};box-shadow:inset 0 0 0 1px ${tema.activeBorder}}
         .sb-nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
         .sb-bottom{padding:12px 10px;border-top:1px solid var(--border,rgba(255,255,255,0.09))}
         .sb-bottom a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:500;color:var(--muted,#8C9BB5);text-decoration:none;transition:all .18s}

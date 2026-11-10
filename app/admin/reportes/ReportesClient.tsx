@@ -264,17 +264,55 @@ export default function ReportesClient({ resumen, citasPorMes, pacientesPorTerap
         </div>
 
         <div className="content">
-          <div className="reporte-body">
+          <div className="reporte-body" style={{ position: 'relative' }}>
 
-            {/* ENCABEZADO DEL REPORTE */}
-            <div className="reporte-header print-section">
-              <div>
-                <div className="reporte-clinic">RehabControl · Clínica de Rehabilitación</div>
-                <div className="reporte-titulo">Reporte ejecutivo</div>
-                <div className="reporte-fecha">Generado el {hoy} · Datos en tiempo real</div>
+            {/* MARCA DE AGUA OFICIAL (Visible sutilmente en pantalla y al exportar PDF) */}
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) rotate(-32deg)',
+              pointerEvents: 'none',
+              zIndex: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              opacity: 0.045,
+              userSelect: 'none',
+            }}>
+              <div style={{
+                width: 150, height: 150, borderRadius: '50%',
+                border: '6px solid #2563EB',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 72, fontWeight: 900, color: '#2563EB', marginBottom: 10,
+              }}>RC</div>
+              <div style={{ fontSize: 34, fontWeight: 900, letterSpacing: '0.16em', color: '#2563EB', whiteSpace: 'nowrap' }}>
+                REHABCONTROL · CLÍNICA OFICIAL
+              </div>
+            </div>
+
+            {/* ENCABEZADO DEL REPORTE CON LOGO TIPO EXPEDIENTE */}
+            <div className="reporte-header print-section" style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{
+                  width: 58, height: 58, borderRadius: 14,
+                  background: 'linear-gradient(135deg, #1D4ED8, #0D9488)',
+                  border: '2px solid rgba(56,189,248,0.45)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontWeight: 900, fontSize: 22, flexShrink: 0,
+                  boxShadow: '0 6px 20px rgba(37,99,235,0.35)',
+                }}>
+                  <span>RC</span>
+                  <span style={{ fontSize: 7, letterSpacing: '0.12em', fontWeight: 700, opacity: 0.9 }}>CLÍNICA</span>
+                </div>
+                <div>
+                  <div className="reporte-clinic">RehabControl · Clínica de Rehabilitación Física · Documento Oficial</div>
+                  <div className="reporte-titulo">Reporte Ejecutivo Clínico</div>
+                  <div className="reporte-fecha">Generado el {hoy} · Folio #REP-{new Date().getFullYear()} · Datos en tiempo real</div>
+                </div>
               </div>
               <button className="btn-pdf no-print" onClick={exportarPDF} disabled={exportando}>
-                {exportando ? '⏳ Preparando…' : '⬇ Exportar PDF'}
+                {exportando ? '⏳ Preparando…' : '⬇ Exportar PDF con Marca de Agua'}
               </button>
             </div>
 
