@@ -141,8 +141,31 @@ export default function PacienteDashboardClient({
         </div>
 
         <div className="content">
-          <div className="page-title">Bienvenido, {nombre}</div>
-          <div className="page-sub">Solo puedes ver tu propia información — Nivel 1</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, marginBottom: 24 }}>
+            <div>
+              <div className="page-title">Bienvenido, {nombre}</div>
+              <div className="page-sub" style={{ marginBottom: 0 }}>Solo puedes ver tu propia información — Nivel 1</div>
+            </div>
+            <Link
+              href="/paciente/ejercicios"
+              className="bg-blue-600 hover:bg-blue-500"
+              style={{
+                padding: '11px 20px',
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #2563EB, #38BDF8)',
+                color: '#FFFFFF',
+                fontSize: 13.5,
+                fontWeight: 700,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                boxShadow: '0 8px 22px rgba(37, 99, 235, 0.35)',
+              }}
+            >
+              <span>🎥 Iniciar Terapia Interactiva</span>
+            </Link>
+          </div>
 
           <div className="metrics">
             <div className="metric">

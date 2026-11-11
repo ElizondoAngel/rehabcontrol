@@ -23,7 +23,10 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
                     : dolorUltimo <= 3  ? 'var(--green)'
                     : dolorUltimo <= 6  ? 'var(--amber)' : 'var(--red)'
 
-  const ejerciciosTotales = progreso.reduce((acc: number, s: any) => acc + (s.ejercicios_completados ?? 0), 0)
+  const ejerciciosTotales = progreso.reduce((acc: number, s: any) => {
+    const lista = Array.isArray(s.ejercicios) ? s.ejercicios.length : 0
+    return acc + (s.ejercicios_completados ?? lista)
+  }, 0)
 
   return (
     <>
@@ -121,8 +124,31 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
         </div>
 
         <div className="content">
-          <div className="page-title">Mi Progreso</div>
-          <div className="page-sub">Vista motivacional de tu rehabilitación — solo lectura</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, marginBottom: 24 }}>
+            <div>
+              <div className="page-title">Mi Progreso</div>
+              <div className="page-sub" style={{ marginBottom: 0 }}>Vista motivacional de tu rehabilitación — seguimiento clínico y biomecánico</div>
+            </div>
+            <Link
+              href="/paciente/ejercicios"
+              className="bg-blue-600 hover:bg-blue-500"
+              style={{
+                padding: '11px 20px',
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #2563EB, #38BDF8)',
+                color: '#FFFFFF',
+                fontSize: 13.5,
+                fontWeight: 700,
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                boxShadow: '0 8px 22px rgba(37, 99, 235, 0.35)',
+              }}
+            >
+              <span>🎥 Iniciar Terapia Interactiva</span>
+            </Link>
+          </div>
 
           {progreso.length > 0 && (
             <div className="motivacion">
@@ -158,9 +184,27 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
               <div className="stat-label">Nivel de esfuerzo</div>
               <div className="stat-num" style={{color: dolorColor}}>{dolorTexto}</div>
             </div>
-            <div className="stat-card">
-              <div className="stat-label">Ejercicios completados</div>
-              <div className="stat-num" style={{color:'var(--cyan)'}}>{ejerciciosTotales}</div>
+            <div className="stat-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+              <div>
+                <div className="stat-label">Ejercicios completados</div>
+                <div className="stat-num" style={{color:'var(--cyan)'}}>{ejerciciosTotales}</div>
+              </div>
+              <Link
+                href="/paciente/ejercicios"
+                className="bg-blue-600 hover:bg-blue-500"
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  background: '#2563EB',
+                  color: '#fff',
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  textAlign: 'center',
+                }}
+              >
+                🏋️ Ir a Terapia Interactiva
+              </Link>
             </div>
           </div>
 
@@ -187,9 +231,9 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
                     : 'Esfuerzo intenso'
 
                   return (
-                    <div className="sesion-card" key={s.id}>
+                    <div className="sesion-card" key={s.id_progreso_sesion ?? s.id ?? i}>
                       <div className="sesion-top">
-                      <span className="sesion-fecha">{new Date(s.fecha_registro).toLocaleDateString('es-MX')}</span>
+                        <span className="sesion-fecha">{new Date(s.fecha_registro).toLocaleDateString('es-MX')}</span>
                         <span className="sesion-num">Sesión #{progreso.length - i}</span>
                       </div>
                       <div className="sesion-stats">
@@ -199,15 +243,18 @@ const dolorUltimo = progreso[progreso.length - 1]?.nivel_dolor ?? 0
                         </div>
                         <div className="sstat">
                           <span className="sstat-label">Movilidad</span>
-                          <span className="sstat-val">{s.movilidad ? `${s.movilidad}%` : '—'}</span>
+                          <span className="sstat-val">{s.movilidad ? `${s.movilidad <= 10 ? s.movilidad * 10 : s.movilidad}%` : '—'}</span>
                         </div>
                         <div className="sstat">
                           <span className="sstat-label">Ejercicios</span>
-                          <span className="sstat-val">{s.ejercicios_completados ?? 0}</span>
+                          <span className="sstat-val">{Array.isArray(s.ejercicios) ? s.ejercicios.length : (s.ejercicios_completados ?? 0)}</span>
                         </div>
                       </div>
-                     {s.observaciones && (
-                    <div className="sesion-nota">📝 {s.observaciones}</div>
+                      {/* Regla de Negocio HU #13: En la vista del paciente solo se muestran indicaciones amigables o el resumen de su rutina IA, sin exponer notas clínicas privadas del terapeuta */}
+                      {s.observaciones && (s.observaciones.startsWith('🤖') || s.observaciones.startsWith('📋')) && (
+                        <div className="sesion-nota">
+                          {s.observaciones.split('\n<!-- RUTINA_IA_JSON:')[0]}
+                        </div>
                       )}
                     </div>
                   )

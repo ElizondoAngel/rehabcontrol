@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib'
+import { extraerRutinaDeIndicaciones } from '@/lib/rutina-ia'
 
 const ESTADO_LABEL: Record<string, string> = {
   activo: 'Activo',
@@ -447,12 +448,18 @@ export async function GET(req: Request) {
   drawCampo('Observaciones clinicas', expediente.observaciones_clinicas)
 
   // ── PLAN DE TRATAMIENTO ──
+  const { indicacionesLimpias, rutinaAsignada } = extraerRutinaDeIndicaciones(expediente.indicaciones)
+  const textoRutinaIA = rutinaAsignada.length > 0
+    ? rutinaAsignada.map(r => `- ${r.ejercicio}: ${r.repeticiones} repeticiones${r.modo_adaptado ? ' (Modo Adaptado por Lesion)' : ''}`).join('\n')
+    : 'Sin rutina de camara IA asignada'
+
   drawSeccionTitulo('05. Plan de tratamiento y ejercicios')
   drawCampo('Objetivos terapeuticos', expediente.objetivos_terapeuticos)
   drawCampo('Plan de tratamiento', expediente.plan_tratamiento)
   drawCampo('Tipo de terapias', expediente.tipo_terapias)
   drawCampo('Frecuencia de sesiones', expediente.frecuencia_sesiones)
-  drawCampo('Indicaciones y rutina de ejercicios', expediente.indicaciones)
+  drawCampo('Rutina de 6 ejercicios con Camara IA asignada', textoRutinaIA)
+  drawCampo('Indicaciones adicionales en casa', indicacionesLimpias)
 
   // ── ARCHIVOS ADJUNTOS ──
   const archivos = Array.isArray(expediente.archivos) ? expediente.archivos : []

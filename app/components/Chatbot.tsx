@@ -119,12 +119,21 @@ const BIENVENIDA: Record<string, string> = {
 
 const HORARIOS_COMUNES = ['09:00', '10:00', '11:00', '12:00', '13:00', '16:00', '17:00', '18:00']
 
+const EJERCICIOS_FIJOS_IA = [
+  'Sentadilla',
+  'Desplante de Pierna',
+  'Levantar Brazo al Costado',
+  'Doblar y Estirar Codo',
+  'Elevación de Pierna',
+  'Inclinación de Tronco',
+] as const
+
 const CATALOGO_EJERCICIOS_RAPIDOS: Record<string, string[]> = {
-  Rodilla: ['Cuádriceps arco corto (3x15)', 'Prensa unilateral (3x12)', 'Sentadilla TRX (3x12)', 'Bicicleta estática (15 min)', 'Step up/down (3x10)'],
-  Lumbar: ['Bird-dog (3x10 seg)', 'Puente glúteo (3x15)', 'Plancha abdominal (3x20 seg)', 'Extensiones McKenzie (3x10)', 'Estiramiento piriforme (3x30 seg)'],
-  Hombro: ['Péndulos de Codman (3 min)', 'Rotación externa con banda (3x15)', 'Elevación frontal/lateral (3x12)', 'Remo con banda elástica (3x15)'],
-  Cervical: ['Chin tuck / retracción cervical (3x10)', 'Flexión isométrica (3x10 seg)', 'Estiramiento de trapecio (3x30 seg)', 'Movilización activa suave (2x10)'],
-  Tobillo: ['Alfabeto con tobillo (2 series)', 'Elevaciones de talón (3x15)', 'Equilibrio monopodal (3x30 seg)', 'Estiramiento de fascia plantar (3x30 seg)'],
+  Rodilla: ['Sentadilla ×10', 'Desplante de Pierna ×10', 'Elevación de Pierna ×10'],
+  Lumbar: ['Inclinación de Tronco ×10', 'Elevación de Pierna ×10', 'Sentadilla ×8'],
+  Hombro: ['Levantar Brazo al Costado ×10', 'Doblar y Estirar Codo ×12'],
+  Cervical: ['Inclinación de Tronco ×8', 'Levantar Brazo al Costado ×8'],
+  Tobillo: ['Sentadilla ×10', 'Desplante de Pierna ×8', 'Elevación de Pierna ×10'],
 }
 
 const PUEDE_ADJUNTAR = ['admin', 'secretaria', 'terapeuta']
@@ -1789,16 +1798,18 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                   {expTipoAcc === 'ejercicios' && (
                     <>
                       <div>
-                        <label style={cardLabelStyle}>➕ Agregar ejercicio personalizado + repeticiones</label>
+                        <label style={cardLabelStyle}>🎥 Elegir de los 6 Ejercicios Fijos de Cámara IA + repeticiones</label>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <input
-                            type="text"
-                            placeholder="Ej. lagartijas, sentadillas..."
+                          <select
                             value={expCustomNombre}
                             onChange={e => setExpCustomNombre(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), agregarEjercicioPersonalizado())}
-                            style={{ ...cardInputStyle, flex: 1 }}
-                          />
+                            style={{ ...cardInputStyle, flex: 1, cursor: 'pointer' }}
+                          >
+                            <option value="">Selecciona ejercicio del catálogo...</option>
+                            {EJERCICIOS_FIJOS_IA.map(ejFijo => (
+                              <option key={ejFijo} value={ejFijo}>{ejFijo}</option>
+                            ))}
+                          </select>
                           <input
                             type="number"
                             min={1}
@@ -2255,9 +2266,10 @@ export default function Chatbot({ rol = 'paciente', modulo = 'DASHBOARD' }: Prop
                 id="chatbot-message-input"
                 name="chatbot-message-input"
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                maxLength={1000}
+                onChange={e => setInput(e.target.value.slice(0, 1000))}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && !paused && send(input)}
-                placeholder={paused ? 'Edita y reanuda...' : adjunto ? 'Añade mensaje o envía...' : 'Escribe tu mensaje o abre 📋 Tarjeta...'}
+                placeholder={paused ? 'Edita y reanuda...' : adjunto ? 'Añade mensaje o envía...' : 'Escribe tu mensaje (máx. 1000 caracteres)...'}
                 disabled={loading}
                 autoComplete="off"
                 style={{

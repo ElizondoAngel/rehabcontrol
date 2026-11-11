@@ -23,6 +23,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
 import TopbarActions from '@/app/components/TopbarActions'
+import { NOMBRES_EJERCICIOS_FIJOS_IA } from '@/lib/rutina-ia'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Paciente {
@@ -44,6 +45,13 @@ interface ArchivoProgreso {
 interface EjercicioRealizado {
   ejercicio: string
   repeticiones: number
+  modo_adaptado?: boolean
+  repeticiones_estandar?: number
+  repeticiones_adaptadas?: number
+  repeticiones_incompletas?: number
+  angulo_mejor_rango?: number
+  precision_porcentaje?: number
+  evaluado_por_ia?: boolean
 }
 interface Sesion {
   id_progreso_sesion: number
@@ -73,7 +81,7 @@ const TIPOS_ACEPTADOS = ['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'v
 const TAMANO_MAX = 50 * 1024 * 1024
 const MAX_ARCHIVOS = 5
 
-// ── VALIDACIÓN CLIENTE ─────────────────────────────────────────
+// ── VALIDACIÓN CLIENTE (HU #3: nota clínica mínimo 20 caracteres) ─────────────────────────────────────────
 function validarCampos(f: Record<string,string>) {
   const errs: Record<string,string> = {}
   if (!f.cita_id) errs.cita_id = 'Selecciona la sesión a la que corresponde este registro'
@@ -86,6 +94,10 @@ function validarCampos(f: Record<string,string>) {
   else {
     const n = Number(f.movilidad)
     if (Number.isNaN(n) || n < 0 || n > 10) errs.movilidad = 'Debe ser un número entre 0 y 10'
+  }
+  const obs = (f.observaciones ?? '').trim()
+  if (obs.length < 20) {
+    errs.observaciones = 'Las observaciones clínicas de la sesión deben tener mínimo 20 caracteres (Regla de Negocio HU #3)'
   }
   return errs
 }
@@ -285,6 +297,7 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
     payload.append('movilidad', campos.movilidad)
     payload.append('ejercicios', JSON.stringify(ejerciciosLimpios))
     payload.append('observaciones', campos.observaciones || '')
+    payload.append('is_correccion', campos.is_correccion ? 'true' : 'false')
     for (const file of archivosSeleccionados) {
       payload.append('archivos', file)
     }
@@ -562,11 +575,22 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
                       <div className="timeline-field">
                         <div className="timeline-field-lbl">Ejercicios realizados</div>
                         <div className="ejercicios-chips">
-                          {s.ejercicios.map((ej, idx) => (
-                            <span className="ejercicio-chip" key={idx}>
-                              {ej.ejercicio} <strong>×{ej.repeticiones}</strong>
-                            </span>
-                          ))}
+                          {s.ejercicios.map((ej, idx) => {
+                            const reps = ej.repeticiones ?? ((ej.repeticiones_estandar ?? 0) + (ej.repeticiones_adaptadas ?? 0))
+                            const esIA = ej.precision_porcentaje !== undefined || ej.angulo_mejor_rango !== undefined
+                            return (
+                              <span className="ejercicio-chip" key={idx}>
+                                <span>
+                                  {esIA ? '🤖 ' : ''}{ej.ejercicio} <strong>×{reps}</strong>
+                                </span>
+                                {esIA && (
+                                  <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 6, paddingLeft: 6, borderLeft: '1px solid rgba(255,255,255,0.14)' }}>
+                                    Est: <b style={{ color: '#34D399' }}>{ej.repeticiones_estandar ?? 0}</b> · Adap: <b style={{ color: '#38BDF8' }}>{ej.repeticiones_adaptadas ?? 0}</b> · Inc: <b style={{ color: '#F25555' }}>{ej.repeticiones_incompletas ?? 0}</b> · Rango: <b style={{ color: '#E7EDF7' }}>{ej.angulo_mejor_rango}°</b> · Precisión: <b style={{ color: '#34D399' }}>{ej.precision_porcentaje}%</b>
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -642,17 +666,20 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
                   </div>
 
                   <div className="form-group form-grid-full">
-                    <label className="form-label">Ejercicios realizados</label>
+                    <label className="form-label">Ejercicios realizados (Catálogo Fijo de 6 Ejercicios IA)</label>
                     <div className="ejercicios-list">
                       {filasEjercicios.map((fila, i) => (
                         <div className="ejercicio-row" key={i}>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="Ej. Sentadillas"
+                          <select
+                            className="form-select"
                             value={fila.ejercicio}
                             onChange={e => actualizarFilaEjercicio(i, 'ejercicio', e.target.value)}
-                          />
+                          >
+                            <option value="">Selecciona uno de los 6 ejercicios...</option>
+                            {NOMBRES_EJERCICIOS_FIJOS_IA.map(nombreEj => (
+                              <option key={nombreEj} value={nombreEj}>{nombreEj}</option>
+                            ))}
+                          </select>
                           <input
                             type="number"
                             min={0}
@@ -674,15 +701,20 @@ export default function ProgresoDetalleClient({ paciente, sesionesIniciales, cit
                       ))}
                     </div>
                     <button type="button" className="btn-agregar-ejercicio" onClick={agregarFilaEjercicio}>
-                      + Agregar ejercicio
+                      + Agregar ejercicio del catálogo
                     </button>
                     {errores.ejercicios && <span className="err-msg">{errores.ejercicios}</span>}
                   </div>
 
                   <div className="form-group form-grid-full">
-                    <label className="form-label">Observaciones</label>
-                    <textarea name="observaciones" rows={3} className="form-textarea"
-                      placeholder="Notas clínicas sobre cómo respondió el paciente en esta sesión..." />
+                    <label className="form-label">Observaciones clínicas de la sesión (mínimo 20 caracteres) *</label>
+                    <textarea name="observaciones" rows={3} className={`form-textarea${errores.observaciones ? ' err' : ''}`}
+                      placeholder="Notas clínicas detalladas sobre cómo respondió el paciente en esta sesión (mín. 20 caracteres)..." />
+                    {errores.observaciones && <span className="err-msg">{errores.observaciones}</span>}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontSize: 12, color: '#94A3B8', cursor: 'pointer' }}>
+                      <input type="checkbox" name="is_correccion" value="true" style={{ accentColor: '#38BDF8' }} />
+                      <span>Marcar este registro como <strong>corrección de una nota previa</strong> (Regla de Inmutabilidad HU #3)</span>
+                    </label>
                   </div>
 
                   {/* ── NUEVO: Fotos o videos de la sesión ── */}

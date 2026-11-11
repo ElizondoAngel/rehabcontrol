@@ -132,12 +132,11 @@ export async function POST(request: Request) {
       const { error } = await supabase.from('notificaciones').insert(inserts)
       if (error) return NextResponse.json({ error: 'Error al enviar notificaciones' }, { status: 500 })
 
-      // Audit log
+      // Audit log (registro_id es UUID en el Diccionario de Datos, por lo que guardamos el rol en accion)
       await supabase.from('audit_logs').insert({
         user_id: user.id,
-        accion: 'ENVIAR_NOTIFICACION',
+        accion: `ENVIAR_NOTIFICACION_ROL_${destino_rol.toUpperCase()}`,
         tabla_afectada: 'notificaciones',
-        registro_id: `rol:${destino_rol}`,
       })
 
       return NextResponse.json({ ok: true, enviadas: inserts.length }, { status: 201 })

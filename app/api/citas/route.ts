@@ -89,8 +89,8 @@ export async function POST(request: Request) {
     }
 
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion: 'CREAR_CITA',
-      tabla_afectada: 'citas', registro_id: cita.id_cita.toString(),
+      user_id: auth.user.id, accion: `CREAR_CITA_#${cita.id_cita}`,
+      tabla_afectada: 'citas',
     })
 
     return NextResponse.json({ cita }, { status: 201 })
@@ -132,8 +132,8 @@ export async function PUT(request: Request) {
     }
 
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion: 'EDITAR_CITA',
-      tabla_afectada: 'citas', registro_id: id.toString(),
+      user_id: auth.user.id, accion: `EDITAR_CITA_#${id}`,
+      tabla_afectada: 'citas',
     })
 
     return NextResponse.json({ cita })
@@ -168,8 +168,8 @@ export async function PATCH(request: Request) {
     }
 
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion: `CITA_${estado.toUpperCase()}`,
-      tabla_afectada: 'citas', registro_id: id.toString(),
+      user_id: auth.user.id, accion: `CITA_${estado.toUpperCase()}_#${id}`,
+      tabla_afectada: 'citas',
     })
 
     return NextResponse.json({ ok: true })
