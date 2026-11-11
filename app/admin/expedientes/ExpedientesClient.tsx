@@ -371,6 +371,29 @@ export default function ExpedientesClient({ pacientesIniciales, currentUserRol, 
                         <div className="pac-name">{p.nombre_completo}</div>
                         <div className="pac-meta">{edad} años · {exp ? <span className={`badge ${ESTADO_BADGE[exp.estado]}`}>{ESTADO_LABEL[exp.estado]}</span> : <span className="badge b-gray">Sin expediente</span>}</div>
                       </div>
+                      {exp && (
+                        <button
+                          type="button"
+                          title={`Descargar reporte PDF de ${p.nombre_completo}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            window.open(`/api/expedientes/pdf?id_paciente=${p.id_paciente}`, '_blank')
+                          }}
+                          style={{
+                            background: 'rgba(56,189,248,0.14)',
+                            border: '1px solid rgba(56,189,248,0.4)',
+                            borderRadius: 7,
+                            padding: '4px 8px',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            color: '#38BDF8',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                        >
+                          📥 PDF
+                        </button>
+                      )}
                     </div>
                   )
                 })}
@@ -401,8 +424,17 @@ export default function ExpedientesClient({ pacientesIniciales, currentUserRol, 
                         </div>
                       </div>
                     </div>
-                    <div className="pac-header-right">
+                    <div className="pac-header-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {exp && <span className={`badge ${ESTADO_BADGE[exp.estado]}`}>{ESTADO_LABEL[exp.estado]}</span>}
+                      {exp && (
+                        <button
+                          type="button"
+                          className="btn-save"
+                          onClick={() => window.open(`/api/expedientes/pdf?id_paciente=${pacienteSeleccionado.id_paciente}`, '_blank')}
+                        >
+                          📥 Bajar Reporte PDF
+                        </button>
+                      )}
                       {!editando && (
                         <button className="btn-edit" onClick={() => setEditando(true)}>
                           {exp ? '✏️ Editar' : '+ Crear expediente'}

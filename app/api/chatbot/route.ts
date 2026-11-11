@@ -97,14 +97,71 @@ const FUNCTION_DECLARATIONS = [
       'Lista los reportes de síntomas pendientes (no leídos) de los pacientes del TERAPEUTA que está usando el chat. Úsala cuando el terapeuta pida ver reportes de síntomas.',
     parameters: { type: 'OBJECT', properties: {} },
   },
+  {
+    name: 'registrar_pago_paciente',
+    description:
+      'Registra un pago para un paciente (exclusivo de SECRETARIA). Primero obtén paciente_id con buscar_paciente si solo tienes el nombre. Nunca pidas el ID al usuario.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        paciente_id: { type: 'NUMBER', description: 'ID numérico del paciente obtenido con buscar_paciente' },
+        monto: { type: 'NUMBER', description: 'Monto del pago en MXN (mayor a 0)' },
+        metodo_pago: { type: 'STRING', description: 'Uno de: efectivo, transferencia, tarjeta, aseguradora' },
+        estado_pago: { type: 'STRING', description: 'Uno de: pagado, pendiente. Por defecto pagado.' },
+      },
+      required: ['paciente_id', 'monto', 'metodo_pago'],
+    },
+  },
+  {
+    name: 'consultar_adeudos_paciente',
+    description:
+      'Consulta los pagos pendientes (adeudos) y el historial reciente de pagos de un paciente (exclusivo de SECRETARIA). Primero obtén paciente_id con buscar_paciente.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        paciente_id: { type: 'NUMBER', description: 'ID numérico del paciente obtenido con buscar_paciente' },
+      },
+      required: ['paciente_id'],
+    },
+  },
+  {
+    name: 'actualizar_expediente_ejercicios',
+    description:
+      'Asigna ejercicios terapéuticos, indicaciones o actualiza las notas clínicas en el expediente de un paciente asignado al TERAPEUTA, y registra los ejercicios en progreso_sesiones para que el PACIENTE los vea inmediatamente en su apartado "Mis Ejercicios". Primero obtén paciente_id con buscar_paciente.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        paciente_id: { type: 'NUMBER', description: 'ID numérico del paciente obtenido con buscar_paciente' },
+        zona_enfocada: { type: 'STRING', description: 'Zona anatómica o área tratada (ej. Rodilla, Lumbar, Hombro, Cervical, Tobillo)' },
+        ejercicios_asignados: { type: 'STRING', description: 'Lista de ejercicios terapéuticos separados por coma (ej. "Cuádriceps arco corto (3x15), Sentadilla TRX (3x12)")' },
+        observaciones_clinicas: { type: 'STRING', description: 'Notas del terapeuta / indicaciones para el paciente y el expediente' },
+        nivel_dolor: { type: 'NUMBER', description: 'Nivel de dolor de la sesión de 0 a 10 (por defecto 5)' },
+        movilidad: { type: 'NUMBER', description: 'Nivel de movilidad de la sesión de 0 a 10 (por defecto 8)' },
+      },
+      required: ['paciente_id'],
+    },
+  },
 ]
 
 // Qué función puede usar cada rol — el paciente SOLO reporta síntomas,
 // agendar citas es exclusivo de secretaria/terapeuta. El admin es solo lectura/orientación.
 const FUNCIONES_POR_ROL: Record<string, string[]> = {
   paciente:   ['guardar_reporte_sintomas'],
-  secretaria: ['buscar_paciente', 'buscar_terapeuta', 'ver_horarios_ocupados', 'agendar_cita'],
-  terapeuta:  ['buscar_paciente', 'ver_horarios_ocupados', 'agendar_cita', 'ver_reportes_pacientes'],
+  secretaria: [
+    'buscar_paciente',
+    'buscar_terapeuta',
+    'ver_horarios_ocupados',
+    'agendar_cita',
+    'registrar_pago_paciente',
+    'consultar_adeudos_paciente',
+  ],
+  terapeuta: [
+    'buscar_paciente',
+    'ver_horarios_ocupados',
+    'agendar_cita',
+    'ver_reportes_pacientes',
+    'actualizar_expediente_ejercicios',
+  ],
   admin:      [],
 }
 
@@ -223,12 +280,234 @@ async function ejecutarFuncion(
       if (rol !== 'terapeuta') return { error: 'Solo el terapeuta puede ver estos reportes.' }
       const { data, error } = await supabase
         .from('reportes_sintomas')
-        .select('id_reporte, paciente_id, zona_dolor, intensidad, resumen_ia, leido_por_terapeuta, created_at, pacientes(nombre_completo)')
+        .select('id_reporte, paciente_id, zona_dolor, tipo_dolor, intensidad, inicio_sintomas, factores_agravantes, factores_mejora, sintomas_adicionales, resumen_ia, leido_por_terapeuta, created_at, pacientes(nombre_completo)')
         .eq('terapeuta_id', userId)
         .order('created_at', { ascending: false })
-        .limit(10)
+        .limit(15)
       if (error) return { error: error.message }
       return { reportes: data }
+    }
+    case 'registrar_pago_paciente': {
+      if (rol !== 'secretaria') {
+        return { error: 'Solo la secretaria puede registrar pagos desde el chatbot.' }
+      }
+      const monto = Number(args.monto)
+      if (!args.paciente_id || isNaN(monto) || monto <= 0) {
+        return { error: 'Datos de pago inválidos: se requiere paciente_id y un monto mayor a 0.' }
+      }
+      const metodosValidos = ['efectivo', 'transferencia', 'tarjeta', 'aseguradora']
+      const metodo = metodosValidos.includes(args.metodo_pago) ? args.metodo_pago : 'efectivo'
+      const estado = args.estado_pago === 'pendiente' ? 'pendiente' : 'pagado'
+
+      const { data: pago, error } = await supabase
+        .from('pagos')
+        .insert({
+          paciente_id: args.paciente_id,
+          monto,
+          metodo_pago: metodo,
+          estado_pago: estado,
+          fecha_pago: new Date().toISOString(),
+          registrado_por: userId,
+        })
+        .select('id_pago, monto, metodo_pago, estado_pago, fecha_pago')
+        .single()
+
+      if (error) return { error: `Error al registrar pago: ${error.message}` }
+
+      try {
+        await supabase.from('audit_logs').insert({
+          user_id: userId,
+          accion: 'REGISTRAR_PAGO_CHATBOT',
+          tabla_afectada: 'pagos',
+          registro_id: pago.id_pago.toString(),
+        })
+      } catch {}
+
+      return {
+        exito: true,
+        pago,
+        mensaje: `Pago #${pago.id_pago} por $${monto.toFixed(2)} MXN (${metodo}, ${estado}) registrado correctamente.`,
+      }
+    }
+    case 'consultar_adeudos_paciente': {
+      if (rol !== 'secretaria') {
+        return { error: 'Solo la secretaria puede consultar adeudos detallados desde aquí.' }
+      }
+      const { data: pagos, error } = await supabase
+        .from('pagos')
+        .select('id_pago, monto, estado_pago, metodo_pago, fecha_pago, pacientes(nombre_completo)')
+        .eq('paciente_id', args.paciente_id)
+        .order('fecha_pago', { ascending: false })
+        .limit(15)
+
+      if (error) return { error: `Error consultando adeudos: ${error.message}` }
+
+      const lista = pagos ?? []
+      const totalAdeudo = lista
+        .filter((p: any) => p.estado_pago === 'pendiente')
+        .reduce((acc: number, p: any) => acc + Number(p.monto), 0)
+      const totalPagado = lista
+        .filter((p: any) => p.estado_pago === 'pagado')
+        .reduce((acc: number, p: any) => acc + Number(p.monto), 0)
+
+      return {
+        total_adeudo_pendiente: totalAdeudo,
+        total_pagado_reciente: totalPagado,
+        cantidad_pendientes: lista.filter((p: any) => p.estado_pago === 'pendiente').length,
+        historial_reciente: lista,
+      }
+    }
+    case 'actualizar_expediente_ejercicios': {
+      if (rol !== 'terapeuta') {
+        return { error: 'Solo el terapeuta puede asignar ejercicios o actualizar el expediente clínico.' }
+      }
+      // Verificar que el paciente pertenezca a este terapeuta
+      const { data: paciente, error: errPac } = await supabase
+        .from('pacientes')
+        .select('id_paciente, nombre_completo')
+        .eq('id_paciente', args.paciente_id)
+        .eq('terapeuta_id', userId)
+        .single()
+
+      if (errPac || !paciente) {
+        return { error: 'Paciente no encontrado o no está asignado a tu cuenta de terapeuta.' }
+      }
+
+      const fechaStr = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
+      const bloqueEjercicios = args.ejercicios_asignados
+        ? `[${fechaStr}${args.zona_enfocada ? ` · ${args.zona_enfocada}` : ''}] Ejercicios: ${args.ejercicios_asignados}`
+        : null
+      const bloqueNotas = args.observaciones_clinicas
+        ? `[${fechaStr}${args.zona_enfocada ? ` · ${args.zona_enfocada}` : ''}] ${args.observaciones_clinicas}`
+        : null
+
+      // 1. Actualizar o crear en la tabla `expedientes` (archivo clínico del terapeuta/admin)
+      const { data: expExistente } = await supabase
+        .from('expedientes')
+        .select('id_expediente, indicaciones, observaciones_clinicas, plan_tratamiento')
+        .eq('paciente_id', args.paciente_id)
+        .maybeSingle()
+
+      if (expExistente) {
+        const nuevasIndicaciones = bloqueEjercicios
+          ? [expExistente.indicaciones, bloqueEjercicios].filter(Boolean).join('\n')
+          : expExistente.indicaciones
+        const nuevasObservaciones = bloqueNotas
+          ? [expExistente.observaciones_clinicas, bloqueNotas].filter(Boolean).join('\n')
+          : expExistente.observaciones_clinicas
+
+        const { error: errUpd } = await supabase
+          .from('expedientes')
+          .update({
+            indicaciones: nuevasIndicaciones,
+            observaciones_clinicas: nuevasObservaciones,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id_expediente', expExistente.id_expediente)
+
+        if (errUpd) return { error: `Error al actualizar expediente: ${errUpd.message}` }
+      } else {
+        const { error: errIns } = await supabase
+          .from('expedientes')
+          .insert({
+            paciente_id: args.paciente_id,
+            terapeuta_id: userId,
+            diagnostico: args.zona_enfocada ? `Valoración y rehabilitación de ${args.zona_enfocada}` : 'En valoración fisioterapéutica',
+            motivo_consulta: args.observaciones_clinicas || `Rehabilitación física (${args.zona_enfocada || 'General'})`,
+            indicaciones: bloqueEjercicios,
+            observaciones_clinicas: bloqueNotas,
+            estado: 'activo',
+            fecha_apertura: new Date().toISOString(),
+          })
+
+        if (errIns) return { error: `Error al crear expediente inicial: ${errIns.message}` }
+      }
+
+      // 2. Si se asignaron ejercicios, registrarlos en `progreso_sesiones` para que el PACIENTE
+      //    pueda verlos inmediatamente en su apartado `/paciente/ejercicios` ("Mis Ejercicios")
+      let visibleEnPortalPaciente = false
+      if (args.ejercicios_asignados) {
+        // Parsear texto de ejercicios a formato JSONB [{ ejercicio, repeticiones }]
+        const itemsRaw = String(args.ejercicios_asignados)
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+
+        const ejerciciosJson = itemsRaw.map(item => {
+          // Si viene ej. "Cuádriceps arco corto (3x15)" o "Sentadillas x12", extrae el último número como repeticiones
+          const matchReps = item.match(/[x×]\s*(\d+)/i) || item.match(/\((\d+)\s*(?:min|seg|rep|series)?\)/i)
+          const repeticiones = matchReps ? Math.max(1, parseInt(matchReps[1], 10)) : 10
+          const nombreLimpio = item.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s*[x×]\s*\d+/gi, '').trim() || item
+          return { ejercicio: nombreLimpio, repeticiones }
+        })
+
+        // Buscar una cita completada sin progreso previo, o la cita más reciente del paciente
+        const { data: sesionesPrevias } = await supabase
+          .from('progreso_sesiones')
+          .select('cita_id')
+          .eq('paciente_id', args.paciente_id)
+        const citasUsadas = new Set((sesionesPrevias ?? []).map((s: any) => s.cita_id))
+
+        const { data: citasPac } = await supabase
+          .from('citas')
+          .select('id_cita, estado')
+          .eq('paciente_id', args.paciente_id)
+          .eq('terapeuta_id', userId)
+          .order('fecha_hora', { ascending: false })
+          .limit(10)
+
+        let citaIdParaSesion: number | null = null
+        const citaLibre = (citasPac ?? []).find((c: any) => !citasUsadas.has(c.id_cita))
+        if (citaLibre) {
+          citaIdParaSesion = citaLibre.id_cita
+          if (citaLibre.estado !== 'completada') {
+            await supabase.from('citas').update({ estado: 'completada' }).eq('id_cita', citaLibre.id_cita)
+          }
+        } else {
+          // Si no tiene cita disponible, creamos un registro de sesión completada en `citas` para vincular los ejercicios
+          const { data: nuevaCita } = await supabase
+            .from('citas')
+            .insert({
+              paciente_id: args.paciente_id,
+              terapeuta_id: userId,
+              created_by: userId,
+              fecha_hora: new Date().toISOString(),
+              duracion_min: 60,
+              estado: 'completada',
+              notas: `Asignación de ejercicios (${args.zona_enfocada || 'General'})`,
+            })
+            .select('id_cita')
+            .single()
+          if (nuevaCita) citaIdParaSesion = nuevaCita.id_cita
+        }
+
+        if (citaIdParaSesion) {
+          const dolorNum = Math.min(10, Math.max(0, Number(args.nivel_dolor ?? 4)))
+          const movNum = Math.min(10, Math.max(0, Number(args.movilidad ?? 8)))
+          const { error: errProg } = await supabase
+            .from('progreso_sesiones')
+            .insert({
+              cita_id: citaIdParaSesion,
+              paciente_id: args.paciente_id,
+              nivel_dolor: Number.isNaN(dolorNum) ? 4 : dolorNum,
+              movilidad: Number.isNaN(movNum) ? 8 : movNum,
+              ejercicios: ejerciciosJson,
+              observaciones: args.observaciones_clinicas || `Rutina enfocada en ${args.zona_enfocada || 'rehabilitación'}`,
+              archivos: [],
+              fecha_registro: new Date().toISOString(),
+            })
+          if (!errProg) visibleEnPortalPaciente = true
+        }
+      }
+
+      return {
+        exito: true,
+        paciente: paciente.nombre_completo,
+        visible_en_mis_ejercicios_paciente: visibleEnPortalPaciente,
+        mensaje: visibleEnPortalPaciente
+          ? `Expediente actualizado y ejercicios publicados en el apartado "Mis Ejercicios" de ${paciente.nombre_completo}.`
+          : `Expediente clínico de ${paciente.nombre_completo} actualizado correctamente.`,
+      }
     }
     default:
       return { error: 'Función no reconocida' }
@@ -474,6 +753,8 @@ CAPACIDADES REALES (function calling) — varían según el rol:
   El paciente NO puede agendar citas por el chat; si pide una cita, indícale que la
   secretaria la confirma (puede llamar o ir al módulo de citas).
   El admin tampoco agenda citas desde el chat: solo tiene visión de datos y orientación.
+- registrar_pago_paciente / consultar_adeudos_paciente: SOLO secretaria, permite registrar pagos y consultar adeudos de un paciente.
+- actualizar_expediente_ejercicios: SOLO terapeuta, permite asignar ejercicios/indicaciones y actualizar notas clínicas en el expediente de su paciente.
 - guardar_reporte_sintomas: SOLO paciente, guarda su reporte para el terapeuta.
 - ver_reportes_pacientes: SOLO terapeuta, lista los reportes de sus pacientes.
 
@@ -555,6 +836,11 @@ ORIENTACIÓN CLÍNICA GENERAL (no diagnóstico):
 ROL: SECRETARIA — Gestión operativa de Rehabilitandomed.
 Módulos: /secretaria/dashboard · /secretaria/pacientes · /secretaria/citas · /secretaria/pagos
 
+ACCIONES DISPONIBLES:
+✅ agendar_cita / buscar_paciente / buscar_terapeuta / ver_horarios_ocupados
+✅ registrar_pago_paciente → registra un pago para un paciente
+✅ consultar_adeudos_paciente → consulta el saldo pendiente e historial de pagos de un paciente
+
 FLUJO PARA AGENDAR CITA (pide todo junto, sin rondas innecesarias):
 En cuanto detectes intención de agendar una cita, responde UNA sola vez pidiendo todo de golpe:
 
@@ -580,6 +866,18 @@ Con los resultados de esas búsquedas:
 - Si paciente_id, terapeuta_id, fecha/hora y (si aplica) los datos de pago ya están
   claros y confirmados, llama a agendar_cita en esa misma respuesta — no hagas una
   ronda extra solo para "confirmar" si el usuario ya dio todo explícitamente.
+
+FLUJO PARA REGISTRAR UN PAGO O CONSULTAR ADEUDOS:
+- Si piden registrar un pago y aún no dan los datos, pide en una sola lista:
+  "Para registrar el pago dime en un solo mensaje:
+  1) Nombre del paciente
+  2) Monto del pago
+  3) Método de pago (efectivo, transferencia, tarjeta o aseguradora)
+  4) Estado del pago (pagado o pendiente)"
+- Si ya te dieron todos los datos del pago (o enviaron la tarjeta interactiva), busca primero
+  al paciente con buscar_paciente y en seguida llama a registrar_pago_paciente.
+- Si piden consultar adeudos de un paciente por nombre, usa buscar_paciente y luego
+  consultar_adeudos_paciente para mostrar el total pendiente, total pagado y el desglose.
 `,
   terapeuta: `
 ROL: TERAPEUTA — Gestión clínica de pacientes asignados.
@@ -587,6 +885,7 @@ Módulos: /terapeuta/dashboard · /terapeuta/pacientes · /terapeuta/expedientes
 ACCIONES DISPONIBLES:
 ✅ ver_reportes_pacientes → reportes de síntomas que tus pacientes llenaron en el chat.
 ✅ agendar_cita / buscar_paciente / ver_horarios_ocupados.
+✅ actualizar_expediente_ejercicios → asigna ejercicios/indicaciones o actualiza notas clínicas en el expediente de tu paciente.
 NOTA: cuando agendas una cita, el terapeuta_id eres tú mismo automáticamente — no necesitas
 buscarte ni dar tu propio ID, solo resuelve el paciente_id con buscar_paciente.
 
@@ -608,6 +907,14 @@ NUNCA pidas un ID directamente — se obtiene solo con buscar_paciente.
   ya está disponible, no necesitas buscarlo).
 - Si paciente_id, fecha/hora y (si aplica) datos de pago ya están claros y confirmados,
   llama a agendar_cita en esa misma respuesta, sin una ronda extra solo para confirmar.
+
+FLUJO PARA ASIGNAR EJERCICIOS O ACTUALIZAR NOTAS EN EL EXPEDIENTE:
+- Si el terapeuta pide asignar ejercicios o actualizar el expediente sin dar los datos, responde en una sola lista:
+  "Para asignar ejercicios o actualizar el expediente dime en un solo mensaje:
+  1) Nombre del paciente
+  2) Zona o área enfocada (ej. Rodilla, Lumbar, Hombro, Cervical, Tobillo)
+  3) Ejercicios asignados y/o notas clínicas para el expediente"
+- En cuanto recibas los datos (o la tarjeta interactiva completa), llama a buscar_paciente y en seguida a actualizar_expediente_ejercicios para guardarlo en el expediente real.
 
 CATÁLOGO DE EJERCICIOS:
 RODILLA: cuádriceps arco corto, prensa unilateral, sentadilla TRX, bicicleta, step up/down.
@@ -649,11 +956,12 @@ async function llamarGeminiConFunciones(
   userId: string,
   rol: string,
   apiKey: string
-): Promise<string> {
+): Promise<{ texto: string; reportesPacientes?: any[] }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`
   let turnos = [...contents]
   let intentos = 0
   let huboFuncion = false
+  let reportesCapturados: any[] | undefined = undefined
   const funcionesPermitidas = declaracionesParaRol(rol)
 
   // ── Fase 1: solo function calling (acciones reales) ────────────
@@ -678,10 +986,10 @@ async function llamarGeminiConFunciones(
           'Límite de cuota o alta demanda en Gemini (function calling)',
           userId
         )
-        return 'El asistente está saturado o esta en actualiuzación por favor intenta más tarde 🙏'
+        return { texto: 'El asistente está saturado o esta en actualiuzación por favor intenta más tarde 🙏', reportesPacientes: reportesCapturados }
       }
       await registrarEventoSeguridad(supabase, 'ERROR_IA', resultado.errorTexto.slice(0, 200), userId)
-      return 'Tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.'
+      return { texto: 'Tuve un problema procesando tu mensaje. Intenta de nuevo en un momento.', reportesPacientes: reportesCapturados }
     }
 
     const data = resultado.data
@@ -703,10 +1011,10 @@ async function llamarGeminiConFunciones(
 
       if (!huboFuncion && pareceNecesitarBusqueda) {
         const conBusqueda = await llamarGeminiConBusqueda(systemPrompt, turnos, apiKey)
-        if (conBusqueda) return conBusqueda
+        if (conBusqueda) return { texto: conBusqueda, reportesPacientes: reportesCapturados }
       }
 
-      return texto || 'No pude generar una respuesta.'
+      return { texto: texto || 'No pude generar una respuesta.', reportesPacientes: reportesCapturados }
     }
 
     huboFuncion = true
@@ -716,6 +1024,9 @@ async function llamarGeminiConFunciones(
     for (const fc of funcCalls) {
       const { name, args } = fc.functionCall!
       const resultadoFn = await ejecutarFuncion(supabase, name, args, userId, rol)
+      if (name === 'ver_reportes_pacientes' && Array.isArray((resultadoFn as any)?.reportes)) {
+        reportesCapturados = (resultadoFn as any).reportes
+      }
       responseParts.push({ functionResponse: { name, response: resultadoFn } })
     }
     turnos.push({ role: 'function', parts: responseParts })
@@ -723,7 +1034,7 @@ async function llamarGeminiConFunciones(
     intentos++
   }
 
-  return 'No pude completar la acción, intenta reformular tu solicitud.'
+  return { texto: 'No pude completar la acción, intenta reformular tu solicitud.', reportesPacientes: reportesCapturados }
 }
 
 // ── Fase 2 (opcional): solo búsqueda web, sin function calling ─────
@@ -753,7 +1064,7 @@ async function llamarGeminiConBusqueda(
   return parts.filter(p => p.text).map(p => p.text).join('') || null
 }
 
-// ── GET: cargar historial guardado del usuario ──────────────────────
+// ── GET: cargar historial guardado del usuario (se limpia por día) ──
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -764,20 +1075,72 @@ export async function GET() {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
     }
 
+    // Inicio del día actual en Ciudad de México (UTC-6)
+    const hoyMexico = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
+    const inicioHoyISO = `${hoyMexico}T00:00:00-06:00`
+
+    // Borrar automáticamente el historial de días anteriores para este usuario
+    try {
+      await supabase
+        .from('chatbot_historial')
+        .delete()
+        .eq('profile_id', user.id)
+        .lt('created_at', inicioHoyISO)
+    } catch (e) {
+      console.warn('⚠️ Aviso al limpiar historial de días anteriores:', e)
+    }
+
     const { data, error } = await supabase
       .from('chatbot_historial')
-      .select('role, content, created_at')
+      .select('role, content, created_at, modulo')
       .eq('profile_id', user.id)
+      .gte('created_at', inicioHoyISO)
       .order('created_at', { ascending: true })
-      .limit(50)
+      .limit(80)
 
     if (error) {
       console.error('❌ GET historial — error de Supabase:', error.message, error.details, error.hint)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
-    return NextResponse.json({ historial: data ?? [] })
+
+    // Si es terapeuta, también devolvemos los reportes de síntomas separados por paciente
+    let reportesPacientes: any[] = []
+    try {
+      const { data: reps } = await supabase
+        .from('reportes_sintomas')
+        .select('id_reporte, paciente_id, zona_dolor, tipo_dolor, intensidad, inicio_sintomas, factores_agravantes, factores_mejora, sintomas_adicionales, resumen_ia, leido_por_terapeuta, created_at, pacientes(nombre_completo)')
+        .eq('terapeuta_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      if (reps) reportesPacientes = reps
+    } catch {}
+
+    return NextResponse.json({ historial: data ?? [], fecha_dia: hoyMexico, reportesPacientes })
   } catch (err: any) {
     console.error('❌ GET historial — error inesperado:', err?.message ?? err)
+    return NextResponse.json({ error: err?.message ?? 'Error interno' }, { status: 500 })
+  }
+}
+
+// ── DELETE: borrar manualmente el historial del día del usuario ──────
+export async function DELETE() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
+
+    const { error } = await supabase
+      .from('chatbot_historial')
+      .delete()
+      .eq('profile_id', user.id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Error interno' }, { status: 500 })
   }
 }
@@ -881,13 +1244,17 @@ ${contexto ? `\nCONTEXTO EN TIEMPO REAL:\n${contexto}` : ''}`
     try {
       await supabase.from('chatbot_historial').insert([
         { profile_id: user.id, role: 'user', content: ultimoTexto || `📎 ${body.file?.name ?? 'archivo'}`, modulo: body.modulo ?? null },
-        { profile_id: user.id, role: 'assistant', content: respuesta, modulo: body.modulo ?? null },
+        { profile_id: user.id, role: 'assistant', content: respuesta.texto, modulo: body.modulo ?? null },
       ])
     } catch (e) {
       console.error('Error guardando historial:', e)
     }
 
-    return NextResponse.json({ reply: respuesta, rol })
+    return NextResponse.json({
+      reply: respuesta.texto,
+      reportesPacientes: respuesta.reportesPacientes,
+      rol,
+    })
   } catch (err) {
     console.error('❌ Chatbot error:', err)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

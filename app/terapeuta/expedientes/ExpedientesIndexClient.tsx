@@ -248,11 +248,35 @@ export default function ExpedientesIndexClient({ pacientes, expedientes, userNom
                       <div className="p-name">{p.nombre_completo}</div>
                       <div className="p-curp">{p.curp}</div>
                     </div>
-                    <div className="folder-footer">
+                    <div className="folder-footer" style={{ gap: 8 }}>
                       <span className="folder-footer-label">
                         🕐 {exp ? tiempoRelativo(exp.updated_at ?? exp.fecha_apertura) : 'Sin actividad'}
                       </span>
-                      <span className="folder-footer-action">{exp ? 'Abrir →' : 'Crear +'}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {exp && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              window.open(`/api/expedientes/pdf?id_paciente=${p.id_paciente}`, '_blank')
+                            }}
+                            style={{
+                              background: 'rgba(56,189,248,0.14)',
+                              border: '1px solid rgba(56,189,248,0.4)',
+                              borderRadius: 7,
+                              padding: '4px 9px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: '#38BDF8',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            📥 Bajar PDF
+                          </button>
+                        )}
+                        <span className="folder-footer-action">{exp ? 'Abrir →' : 'Crear +'}</span>
+                      </div>
                     </div>
                   </Link>
                 )
