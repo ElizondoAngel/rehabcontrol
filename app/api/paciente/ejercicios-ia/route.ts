@@ -169,16 +169,6 @@ export async function POST(request: Request) {
       paciente = pacAdmin
     }
 
-    if (!paciente && profile?.nombre_completo) {
-      const { data: pacPorNombre } = await db
-        .from('pacientes')
-        .select('id_paciente, nombre_completo, terapeuta_id')
-        .ilike('nombre_completo', profile.nombre_completo.trim())
-        .limit(1)
-        .maybeSingle()
-      paciente = pacPorNombre
-    }
-
     if (!paciente) {
       return NextResponse.json(
         { error: 'No se encontró tu registro de paciente vinculado a esta cuenta.' },
