@@ -175,6 +175,9 @@ export default function EvaluadorBiomecanico({
   const [posturaFirme, setPosturaFirme] = useState<boolean>(false)
   const posturaFirmeRef = useRef<boolean>(false)
   const framesEnPosicionInicialRef = useRef<number>(0)
+  // Indica si la cámara está realmente encendida (evita que el bucle y la voz sigan activos tras detener)
+  const camaraActivaRef = useRef<boolean>(false)
+  const permitirVozSinCamaraRef = useRef<boolean>(false)
 
   // Control de meta cumplida por ejercicio (detenerse y pedir confirmación antes de pasar al siguiente)
   const [metaAlcanzadaActual, setMetaAlcanzadaActual] = useState<boolean>(false)
@@ -241,6 +244,8 @@ export default function EvaluadorBiomecanico({
   const hablar = useCallback((texto: string, forzar = false) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     if (!vozActivaRef.current) return
+    // Si la cámara está detenida no se emiten instrucciones de postura (solo mensajes finales permitidos)
+    if (!camaraActivaRef.current && !permitirVozSinCamaraRef.current) return
 
     const ahora = Date.now()
     if (!forzar && ultimaFraseRef.current.texto === texto && ahora - ultimaFraseRef.current.ts < 2200) {
@@ -555,6 +560,7 @@ export default function EvaluadorBiomecanico({
 
     return () => {
       cancelado = true
+      camaraActivaRef.current = false
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
@@ -575,6 +581,12 @@ export default function EvaluadorBiomecanico({
     const video = videoRef.current
     const canvas = canvasRef.current
     const detector = landmarkerRef.current
+
+    // Cámara detenida: terminar el bucle por completo (sin reprogramar)
+    if (!camaraActivaRef.current) {
+      animFrameRef.current = null
+      return
+    }
 
     if (!video || !canvas || !detector || video.paused || video.ended || video.readyState < 2) {
       animFrameRef.current = requestAnimationFrame(procesarFotograma)
@@ -1065,6 +1077,7 @@ export default function EvaluadorBiomecanico({
         videoRef.current.srcObject = stream
         videoRef.current.src = ''
         await videoRef.current.play()
+        camaraActivaRef.current = true
         setCamaraActiva(true)
         hablar(
           `Cámara encendida. ${infoEjercicio.mensajeVozInicio} Colócate firme frente a la cámara; la grabación iniciará cuando estés listo.`,
@@ -1082,13 +1095,35 @@ export default function EvaluadorBiomecanico({
   }
 
   // ── Detener cámara / video ──
-  function detenerCamara() {
+  function detenerCamara(opciones?: { mantenerVoz?: boolean }) {
+    // Apagar primero la bandera para que el bucle y la voz dejen de ejecutarse
+    camaraActivaRef.current = false
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    animFrameRef.current = null
+
+    // Callar cualquier instrucción de voz pendiente (ej. "colócate firme")
+    if (!opciones?.mantenerVoz && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch {}
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop()
       } catch {}
     }
+    // Liberar el grabador para que se cree uno nuevo al volver a encender la cámara
+    mediaRecorderRef.current = null
+
+    // Reiniciar el estado de postura para evitar que quede "colgado" al reanudar
+    posturaFirmeRef.current = false
+    framesEnPosicionInicialRef.current = 0
+    mejorFramePendienteRef.current = null
+    bufferAngulosRef.current = []
+    setPosturaFirme(false)
+    setMensajeHud('CÁMARA DETENIDA')
+    setColorHud('#E7EDF7')
     setGrabandoVideo(false)
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop())
@@ -1124,6 +1159,7 @@ export default function EvaluadorBiomecanico({
     videoRef.current.loop = true
     videoRef.current.muted = true
     videoRef.current.play().then(() => {
+      camaraActivaRef.current = true
       setCamaraActiva(true)
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
       animFrameRef.current = requestAnimationFrame(procesarFotograma)
@@ -1245,7 +1281,11 @@ export default function EvaluadorBiomecanico({
           '¡Rutina guardada! Se registró en tu progreso y se envió el aviso con tus posturas y grabación al expediente de tu terapeuta.',
       })
       setGuardando(false)
-      detenerCamara()
+      permitirVozSinCamaraRef.current = true
+      detenerCamara({ mantenerVoz: true })
+      setTimeout(() => {
+        permitirVozSinCamaraRef.current = false
+      }, 8000)
       if (onSerieGuardada && data.sesion) {
         onSerieGuardada(data.sesion)
       }
@@ -1850,7 +1890,7 @@ export default function EvaluadorBiomecanico({
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={detenerCamara}
+                  onClick={() => detenerCamara()}
                   style={{
                     padding: '8px 14px',
                     borderRadius: 10,
