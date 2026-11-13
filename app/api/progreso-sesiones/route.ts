@@ -72,7 +72,8 @@ export async function POST(req: Request) {
   const nivelDolor = formData.get('nivel_dolor') as string | null
   const movilidad = formData.get('movilidad') as string | null
   const ejerciciosRaw = formData.get('ejercicios') as string | null // JSON.stringify del array
-  const observaciones = formData.get('observaciones') as string | null
+  const observacionesRaw = formData.get('observaciones') as string | null
+  const isCorreccion = formData.get('is_correccion') === 'true'
   const archivosFiles = formData.getAll('archivos') as File[]
 
   if (!citaId || !pacienteId) {
@@ -86,6 +87,18 @@ export async function POST(req: Request) {
   if (movilidad == null || Number.isNaN(movilidadNum) || movilidadNum < 0 || movilidadNum > 10) {
     return NextResponse.json({ error: 'Movilidad inválida (0-10)' }, { status: 400 })
   }
+
+  // Regla de Negocio HU #3: Las notas clínicas de sesión deben tener mínimo 20 caracteres y son inmutables (INSERT-only; correcciones como nuevo registro)
+  const obsTexto = (observacionesRaw ?? '').trim()
+  if (obsTexto.length < 20) {
+    return NextResponse.json(
+      { error: 'La nota clínica de la sesión debe tener al menos 20 caracteres (Regla de Negocio HU #3).' },
+      { status: 400 }
+    )
+  }
+  const observaciones = isCorreccion
+    ? `[CORRECCIÓN DE NOTA CLÍNICA] ${obsTexto}`
+    : obsTexto
 
   const { ejercicios, error: errorEjercicios } = parsearEjercicios(ejerciciosRaw)
   if (errorEjercicios) {
@@ -172,6 +185,18 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
+
+  try {
+    const forwarded = req.headers.get('x-forwarded-for')
+    const ip = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1'
+    await supabase.from('audit_logs').insert({
+      user_id: user.id,
+      accion: isCorreccion ? 'REGISTRAR_CORRECCION_NOTA_SESION' : 'REGISTRAR_PROGRESO_SESION',
+      tabla_afectada: 'progreso_sesiones',
+      ip,
+      timestamp: new Date().toISOString(),
+    })
+  } catch {}
 
   const archivosConUrl = await Promise.all(
     archivosConFecha.map(async (a) => {

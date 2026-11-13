@@ -45,10 +45,10 @@ export default async function PacienteDashboard() {
     .order('fecha_pago', { ascending: false })
     .limit(3)
 
-  // 6. Progreso de sesiones (columnas reales: nivel_dolor, movilidad, ejercicios_completados, fecha_registro)
+  // 6. Progreso de sesiones (columnas reales: nivel_dolor, movilidad, ejercicios, fecha_registro)
   const { data: progreso } = await supabase
     .from('progreso_sesiones')
-    .select('nivel_dolor, movilidad, ejercicios_completados, fecha_registro')
+    .select('nivel_dolor, movilidad, ejercicios, fecha_registro')
     .eq('paciente_id', idPaciente)
     .order('fecha_registro', { ascending: false })
     .limit(10)

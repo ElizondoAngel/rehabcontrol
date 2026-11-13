@@ -28,6 +28,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Sidebar, { MenuButton } from '@/app/components/Sidebar'
 import TopbarActions from '@/app/components/TopbarActions'
+import { CATALOGO_EJERCICIOS_IA } from '@/app/components/EvaluadorBiomecanico'
+import {
+  EjercicioAsignadoIA,
+  NombreEjercicioFijoIA,
+  extraerRutinaDeIndicaciones,
+  empaquetarRutinaEnIndicaciones,
+} from '@/lib/rutina-ia'
 
 // ── TIPOS ────────────────────────────────────────────────────
 interface Paciente {
@@ -72,18 +79,52 @@ interface Expediente {
   estado: 'activo' | 'cerrado' | 'en_revision'
   archivos?: ArchivoClinico[]
 }
+interface SesionIAItem {
+  id_progreso_sesion: number
+  nivel_dolor: number
+  movilidad: number
+  ejercicios?: Array<{
+    ejercicio: string
+    repeticiones?: number
+    repeticiones_meta?: number
+    modo_adaptado?: boolean
+    repeticiones_estandar?: number
+    repeticiones_adaptadas?: number
+    repeticiones_incompletas?: number
+    angulo_mejor_rango?: number
+    precision_porcentaje?: number
+    evaluado_por_ia?: boolean
+  }>
+  observaciones?: string
+  archivos?: ArchivoClinico[]
+  fecha_registro: string
+}
 interface Props {
   paciente: Paciente
   expedienteInicial: Expediente | null
+  sesionesIA?: SesionIAItem[]
   terapeutaId: string
   userNombre: string
 }
 
-// ── VALIDACIÓN CLIENTE (primera capa) ─────────────────────────
+// ── VALIDACIÓN CLIENTE (primera capa — Reglas de Negocio HU #3) ─────────────────────────
 function validarCampos(f: Record<string, string>) {
   const errs: Record<string, string> = {}
-  if (!f.diagnostico?.trim())      errs.diagnostico = 'El diagnóstico es obligatorio'
-  if (!f.motivo_consulta?.trim())  errs.motivo_consulta = 'El motivo de consulta es obligatorio'
+  const diag = (f.diagnostico ?? '').trim()
+  const motivo = (f.motivo_consulta ?? '').trim()
+
+  if (!diag) {
+    errs.diagnostico = 'El diagnóstico es obligatorio'
+  } else if (diag.length < 10) {
+    errs.diagnostico = 'El diagnóstico debe tener mínimo 10 caracteres (Regla de Negocio HU #3)'
+  }
+
+  if (!motivo) {
+    errs.motivo_consulta = 'El motivo de consulta es obligatorio'
+  } else if (motivo.length < 5) {
+    errs.motivo_consulta = 'El motivo de consulta debe tener mínimo 5 caracteres'
+  }
+
   if (f.nivel_dolor_inicial) {
     const n = Number(f.nivel_dolor_inicial)
     if (Number.isNaN(n) || n < 0 || n > 10) errs.nivel_dolor_inicial = 'Debe ser un número entre 0 y 10'
@@ -136,7 +177,9 @@ function Toast({ msg, type, onClose }: { msg: string; type: 'success'|'error'; o
 const ESTADOS = [
   { value: 'activo',      label: 'Activo' },
   { value: 'en_revision', label: 'En revisión' },
-  { value: 'cerrado',     label: 'Cerrado' },
+  { value: 'alta',        label: 'Alta clínica (archivado lógico)' },
+  { value: 'suspendido',  label: 'Suspendido (archivado lógico)' },
+  { value: 'cerrado',     label: 'Cerrado (archivado lógico)' },
 ] as const
 
 function calcularEdad(fechaNacimiento?: string) {
@@ -267,7 +310,7 @@ function SeccionArchivos({
 }
 
 // ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export default function ExpedienteClient({ paciente, expedienteInicial, terapeutaId, userNombre }: Props) {
+export default function ExpedienteClient({ paciente, expedienteInicial, sesionesIA = [], terapeutaId, userNombre }: Props) {
   const router = useRouter()
   const [expediente, setExpediente] = useState<Expediente | null>(expedienteInicial)
   const [editando, setEditando] = useState(!expedienteInicial)
@@ -279,6 +322,40 @@ export default function ExpedienteClient({ paciente, expedienteInicial, terapeut
   const formRef = useRef<HTMLFormElement>(null)
   const esNuevo = !expediente
 
+  // Extraer la rutina de los 6 ejercicios fijos guardada en el expediente
+  const datosIndicacionesIniciales = extraerRutinaDeIndicaciones(expediente?.indicaciones)
+  const [rutinaIA, setRutinaIA] = useState<EjercicioAsignadoIA[]>(datosIndicacionesIniciales.rutinaAsignada)
+
+  useEffect(() => {
+    const parsed = extraerRutinaDeIndicaciones(expediente?.indicaciones)
+    setRutinaIA(parsed.rutinaAsignada)
+  }, [expediente?.indicaciones])
+
+  function toggleEjercicioFijo(nombre: NombreEjercicioFijoIA) {
+    setRutinaIA(prev => {
+      const existe = prev.find(item => item.ejercicio === nombre)
+      if (existe) {
+        return prev.filter(item => item.ejercicio !== nombre)
+      }
+      return [...prev, { ejercicio: nombre, repeticiones: 5, modo_adaptado: false }]
+    })
+  }
+
+  function cambiarRepsEjercicioFijo(nombre: NombreEjercicioFijoIA, reps: number) {
+    const num = Math.max(1, Math.min(100, Math.round(reps || 1)))
+    setRutinaIA(prev =>
+      prev.map(item => (item.ejercicio === nombre ? { ...item, repeticiones: num } : item))
+    )
+  }
+
+  function toggleModoAdaptadoFijo(nombre: NombreEjercicioFijoIA) {
+    setRutinaIA(prev =>
+      prev.map(item =>
+        item.ejercicio === nombre ? { ...item, modo_adaptado: !item.modo_adaptado } : item
+      )
+    )
+  }
+
   async function guardar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
@@ -289,6 +366,11 @@ export default function ExpedienteClient({ paciente, expedienteInicial, terapeut
     if (Object.keys(errs).length > 0) { setErrores(errs); return }
     setErrores({})
     setLoading(true)
+
+    const indicacionesEmpaquetadas = empaquetarRutinaEnIndicaciones(
+      campos.indicaciones || '',
+      rutinaIA
+    )
 
     const payload = {
       paciente_id: paciente.id_paciente,
@@ -307,7 +389,7 @@ export default function ExpedienteClient({ paciente, expedienteInicial, terapeut
       objetivos_terapeuticos: campos.objetivos_terapeuticos || null,
       tipo_terapias: campos.tipo_terapias || null,
       frecuencia_sesiones: campos.frecuencia_sesiones || null,
-      indicaciones: campos.indicaciones || null,
+      indicaciones: indicacionesEmpaquetadas || null,
       estado: campos.estado || 'activo',
     }
 
@@ -636,14 +718,203 @@ export default function ExpedienteClient({ paciente, expedienteInicial, terapeut
                     <div className="stat-box-label">Tipo de terapias</div>
                     <div className="stat-box-val" style={{fontSize:13}}>{expediente.tipo_terapias || '—'}</div>
                   </div>
-                  <div className="stat-box" style={{gridColumn: expediente.indicaciones ? 'auto' : 'span 2'}}>
+                  <div className="stat-box" style={{gridColumn: datosIndicacionesIniciales.indicacionesLimpias ? 'auto' : 'span 2'}}>
                     <div className="stat-box-label">Frecuencia</div>
                     <div className="stat-box-val" style={{fontSize:13}}>{expediente.frecuencia_sesiones || '—'}</div>
                   </div>
-                  {expediente.indicaciones && (
+                  {datosIndicacionesIniciales.indicacionesLimpias && (
                     <div className="stat-box">
                       <div className="stat-box-label">Indicaciones</div>
-                      <div className="stat-box-val" style={{fontSize:12.5, fontWeight:400}}>{expediente.indicaciones}</div>
+                      <div className="stat-box-val" style={{fontSize:12.5, fontWeight:400}}>{datosIndicacionesIniciales.indicacionesLimpias}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* TARJETA DE RUTINA ASIGNADA EN CÁMARA IA Y EVIDENCIA DE POSTURAS / GRABACIONES */}
+              <div className="info-card full" style={{ marginBottom: 14, border: '1px solid rgba(56,189,248,0.28)' }}>
+                <div className="info-card-title" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="dot dot-cyan" />
+                    <span>🤖 Rutina de Ejercicios con Cámara IA Asignada y Cumplimiento del Paciente</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditando(true)}
+                    style={{
+                      background: 'rgba(56,189,248,0.12)',
+                      border: '1px solid rgba(56,189,248,0.35)',
+                      color: '#38BDF8',
+                      borderRadius: 8,
+                      padding: '5px 12px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🏋️ Configurar Ejercicios Asignados
+                  </button>
+                </div>
+
+                {/* Lista de los ejercicios actualmente asignados */}
+                <div style={{ marginBottom: 16 }}>
+                  <div className="stat-box-label" style={{ marginBottom: 8 }}>
+                    Ejercicios activos asignados al paciente ({rutinaIA.length} de 6 del catálogo fijo)
+                  </div>
+                  {rutinaIA.length === 0 ? (
+                    <div className="info-card-body empty">
+                      Aún no le has asignado ejercicios de Cámara IA a este paciente. Haz clic en &quot;Editar expediente&quot; para seleccionarlos de los 6 ejercicios fijos.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {rutinaIA.map(item => (
+                        <div
+                          key={item.ejercicio}
+                          style={{
+                            background: 'rgba(56,189,248,0.10)',
+                            border: '1px solid rgba(56,189,248,0.32)',
+                            borderRadius: 10,
+                            padding: '8px 13px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            fontSize: 13,
+                          }}
+                        >
+                          <span>🏋️ <strong>{item.ejercicio}</strong></span>
+                          <span style={{ color: '#34D399', fontWeight: 700 }}>Meta: ×{item.repeticiones} reps</span>
+                          {item.modo_adaptado && (
+                            <span style={{ fontSize: 11, background: 'rgba(245,180,0,0.18)', color: '#FBBF24', padding: '2px 7px', borderRadius: 6 }}>
+                              Modo Lesión
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sesiones y grabaciones realizadas por el paciente en la Cámara IA */}
+                <div>
+                  <div className="stat-box-label" style={{ marginBottom: 8 }}>
+                    Aviso de Cumplimiento, Posturas y Grabaciones de Cámara IA
+                  </div>
+                  {sesionesIA.length === 0 ? (
+                    <div className="info-card-body empty">
+                      El paciente aún no ha registrado series evaluadas con la cámara IA.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {sesionesIA.map(ses => (
+                        <div
+                          key={ses.id_progreso_sesion}
+                          style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 12,
+                            padding: '12px 14px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#E7EDF7' }}>
+                              📅 {new Date(ses.fecha_registro).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 9px', borderRadius: 100, background: 'rgba(52,211,153,0.15)', color: '#34D399' }}>
+                                ✅ Ejercicios registrados ({ses.ejercicios?.length ?? 0})
+                              </span>
+                              <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 9px', borderRadius: 100, background: 'rgba(56,189,248,0.15)', color: '#38BDF8' }}>
+                                Dolor: {ses.nivel_dolor}/10 · Movilidad: {ses.movilidad}/10
+                              </span>
+                            </div>
+                          </div>
+
+                          {ses.ejercicios && ses.ejercicios.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {ses.ejercicios.map((ej, idx) => {
+                                const hechas = ej.repeticiones ?? ((ej.repeticiones_estandar ?? 0) + (ej.repeticiones_adaptadas ?? 0))
+                                return (
+                                  <span
+                                    key={idx}
+                                    style={{
+                                      fontSize: 12,
+                                      background: 'rgba(6,11,20,0.75)',
+                                      border: '1px solid rgba(255,255,255,0.1)',
+                                      borderRadius: 8,
+                                      padding: '5px 10px',
+                                      color: '#E7EDF7',
+                                    }}
+                                  >
+                                    <strong>{ej.ejercicio}</strong>: {hechas}{ej.repeticiones_meta ? `/${ej.repeticiones_meta}` : ''} reps
+                                    {ej.angulo_mejor_rango !== undefined && (
+                                      <span style={{ color: '#94A3B8', marginLeft: 6 }}>
+                                        (Mejor ángulo: <b style={{ color: '#38BDF8' }}>{ej.angulo_mejor_rango}°</b> · Precisión: <b style={{ color: '#34D399' }}>{ej.precision_porcentaje ?? 100}%</b>)
+                                      </span>
+                                    )}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {ses.observaciones && (
+                            <div style={{ fontSize: 12, color: '#94A3B8', whiteSpace: 'pre-wrap' }}>
+                              {extraerRutinaDeIndicaciones(ses.observaciones).indicacionesLimpias}
+                            </div>
+                          )}
+
+                          {/* Video (.webm) y capturas de postura (.jpg) con el esqueleto dibujado */}
+                          {ses.archivos && ses.archivos.length > 0 && (
+                            <div>
+                              <div style={{ fontSize: 10.5, fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', marginBottom: 6 }}>
+                                🎥 Grabación de serie y capturas de postura con esqueleto IA ({ses.archivos.length})
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                                {ses.archivos.map(arch => {
+                                  const isVid = arch.tipo.startsWith('video/')
+                                  return (
+                                    <div
+                                      key={arch.path}
+                                      style={{
+                                        background: '#060B14',
+                                        border: '1px solid rgba(56,189,248,0.3)',
+                                        borderRadius: 10,
+                                        overflow: 'hidden',
+                                        width: isVid ? 260 : 140,
+                                      }}
+                                    >
+                                      {arch.url ? (
+                                        isVid ? (
+                                          <video src={arch.url} controls style={{ width: '100%', height: 145, objectFit: 'cover', display: 'block' }} />
+                                        ) : (
+                                          <a href={arch.url} target="_blank" rel="noopener noreferrer">
+                                            <img src={arch.url} alt={arch.nombre} style={{ width: '100%', height: 115, objectFit: 'cover', display: 'block' }} />
+                                          </a>
+                                        )
+                                      ) : (
+                                        <div style={{ height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+                                          {isVid ? '🎬' : '🖼️'}
+                                        </div>
+                                      )}
+                                      <div style={{ padding: '5px 8px', fontSize: 10.5, color: '#CBD5E1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{arch.nombre}</span>
+                                        {arch.url && (
+                                          <a href={arch.url} target="_blank" rel="noopener noreferrer" style={{ color: '#38BDF8', fontWeight: 700, textDecoration: 'none', marginLeft: 6 }}>
+                                            Abrir ↗
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -791,7 +1062,100 @@ export default function ExpedienteClient({ paciente, expedienteInicial, terapeut
                       <label className="form-label">Indicaciones</label>
                       <textarea name="indicaciones" rows={2} className="form-textarea"
                         placeholder="Indicaciones para el paciente entre sesiones"
-                        defaultValue={expediente?.indicaciones ?? ''} />
+                        defaultValue={datosIndicacionesIniciales.indicacionesLimpias} />
+                    </div>
+
+                    {/* SELECTOR DE LOS 6 EJERCICIOS FIJOS PARA CÁMARA IA */}
+                    <div className="form-group form-grid-full" style={{ marginTop: 8 }}>
+                      <label className="form-label" style={{ color: '#38BDF8', fontSize: 12 }}>
+                        🤖 Asignar Ejercicios de Cámara IA al Paciente (Catálogo Fijo de 6 Ejercicios)
+                      </label>
+                      <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
+                        Marca únicamente los ejercicios que el paciente verá en su apartado &quot;Mis Ejercicios&quot; e indica cuántas repeticiones debe contar la cámara IA para cada uno:
+                      </p>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                        {CATALOGO_EJERCICIOS_IA.map(ej => {
+                          const asignado = rutinaIA.find(r => r.ejercicio === ej.nombre)
+                          const estaActivo = Boolean(asignado)
+                          return (
+                            <div
+                              key={ej.id}
+                              style={{
+                                background: estaActivo ? 'rgba(37, 99, 235, 0.14)' : 'rgba(255,255,255,0.03)',
+                                border: `1.5px solid ${estaActivo ? '#38BDF8' : 'rgba(255,255,255,0.09)'}`,
+                                borderRadius: 12,
+                                padding: '12px 14px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 10,
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: '#E7EDF7' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={estaActivo}
+                                    onChange={() => toggleEjercicioFijo(ej.nombre)}
+                                    style={{ width: 16, height: 16, accentColor: '#38BDF8', cursor: 'pointer' }}
+                                  />
+                                  <span>[{ej.id}] {ej.nombre}</span>
+                                </label>
+                                <span style={{ fontSize: 10.5, color: '#34D399', fontWeight: 600 }}>
+                                  Meta: {ej.metaEstandar}
+                                </span>
+                              </div>
+
+                              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                                {ej.articulaciones}
+                              </div>
+
+                              {estaActivo && asignado && (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 11.5, color: '#CBD5E1', fontWeight: 600 }}>Repeticiones:</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={100}
+                                      value={asignado.repeticiones}
+                                      onChange={e => cambiarRepsEjercicioFijo(ej.nombre, Number(e.target.value))}
+                                      style={{
+                                        width: 68,
+                                        background: '#060B14',
+                                        border: '1px solid #38BDF8',
+                                        borderRadius: 8,
+                                        padding: '5px 8px',
+                                        color: '#F8FAFC',
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        textAlign: 'center',
+                                      }}
+                                    />
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleModoAdaptadoFijo(ej.nombre)}
+                                    style={{
+                                      padding: '5px 10px',
+                                      borderRadius: 8,
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      background: asignado.modo_adaptado ? 'rgba(245,180,0,0.2)' : 'rgba(255,255,255,0.06)',
+                                      border: `1px solid ${asignado.modo_adaptado ? '#FBBF24' : 'rgba(255,255,255,0.14)'}`,
+                                      color: asignado.modo_adaptado ? '#FBBF24' : '#94A3B8',
+                                    }}
+                                  >
+                                    {asignado.modo_adaptado ? '🦿 Modo Lesión Activo' : '⚡ Modo Estándar'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                     <div className="form-group">
                       <label className="form-label">Estado del expediente</label>

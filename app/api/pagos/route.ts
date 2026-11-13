@@ -54,8 +54,8 @@ export async function POST(request: Request) {
     }
 
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion: 'REGISTRAR_PAGO',
-      tabla_afectada: 'pagos', registro_id: pago.id_pago.toString(),
+      user_id: auth.user.id, accion: `REGISTRAR_PAGO_#${pago.id_pago}`,
+      tabla_afectada: 'pagos',
     })
 
     return NextResponse.json({ pago }, { status: 201 })
@@ -114,8 +114,8 @@ export async function PATCH(request: Request) {
                   : 'EDITAR_PAGO'
 
     await supabase.from('audit_logs').insert({
-      user_id: auth.user.id, accion,
-      tabla_afectada: 'pagos', registro_id: id.toString(),
+      user_id: auth.user.id, accion: `${accion}_#${id}`,
+      tabla_afectada: 'pagos',
     })
 
     return NextResponse.json({ ok: true })

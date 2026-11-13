@@ -7,6 +7,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import {
+  normalizarNombreEjercicioIA,
+  extraerRutinaDeIndicaciones,
+  empaquetarRutinaEnIndicaciones,
+  type EjercicioAsignadoIA,
+} from '@/lib/rutina-ia'
 
 interface GeminiPart {
   text?: string
@@ -317,9 +323,8 @@ async function ejecutarFuncion(
       try {
         await supabase.from('audit_logs').insert({
           user_id: userId,
-          accion: 'REGISTRAR_PAGO_CHATBOT',
+          accion: `REGISTRAR_PAGO_CHATBOT_#${pago.id_pago}`,
           tabla_afectada: 'pagos',
-          registro_id: pago.id_pago.toString(),
         })
       } catch {}
 
@@ -374,8 +379,27 @@ async function ejecutarFuncion(
       }
 
       const fechaStr = new Date().toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
-      const bloqueEjercicios = args.ejercicios_asignados
-        ? `[${fechaStr}${args.zona_enfocada ? ` · ${args.zona_enfocada}` : ''}] Ejercicios: ${args.ejercicios_asignados}`
+      const itemsRaw = args.ejercicios_asignados
+        ? String(args.ejercicios_asignados).split(',').map(s => s.trim()).filter(Boolean)
+        : []
+
+      const rutinaFijaAsignada: EjercicioAsignadoIA[] = itemsRaw
+        .map((item) => {
+          const matchReps = item.match(/[x×]\s*(\d+)/i) || item.match(/\((\d+)\s*(?:min|seg|rep|series)?\)/i)
+          const repeticiones = matchReps ? Math.max(1, parseInt(matchReps[1], 10)) : 10
+          const nombreLimpio = item.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s*[x×]\s*\d+/gi, '').trim() || item
+          const oficial = normalizarNombreEjercicioIA(nombreLimpio)
+          if (!oficial) return null
+          return { ejercicio: oficial, repeticiones, modo_adaptado: false }
+        })
+        .filter((x): x is EjercicioAsignadoIA => x !== null)
+
+      const textoEjerciciosLimpio = rutinaFijaAsignada.length > 0
+        ? rutinaFijaAsignada.map(r => `${r.ejercicio} ×${r.repeticiones}`).join(', ')
+        : args.ejercicios_asignados
+
+      const bloqueEjercicios = textoEjerciciosLimpio
+        ? `[${fechaStr}${args.zona_enfocada ? ` · ${args.zona_enfocada}` : ''}] Ejercicios: ${textoEjerciciosLimpio}`
         : null
       const bloqueNotas = args.observaciones_clinicas
         ? `[${fechaStr}${args.zona_enfocada ? ` · ${args.zona_enfocada}` : ''}] ${args.observaciones_clinicas}`
@@ -389,9 +413,14 @@ async function ejecutarFuncion(
         .maybeSingle()
 
       if (expExistente) {
-        const nuevasIndicaciones = bloqueEjercicios
-          ? [expExistente.indicaciones, bloqueEjercicios].filter(Boolean).join('\n')
-          : expExistente.indicaciones
+        const { indicacionesLimpias, rutinaAsignada: rutinaPrevia } = extraerRutinaDeIndicaciones(expExistente.indicaciones)
+        const baseIndicaciones = bloqueEjercicios
+          ? [indicacionesLimpias, bloqueEjercicios].filter(Boolean).join('\n')
+          : indicacionesLimpias
+        const nuevasIndicaciones = empaquetarRutinaEnIndicaciones(
+          baseIndicaciones,
+          rutinaFijaAsignada.length > 0 ? rutinaFijaAsignada : rutinaPrevia
+        )
         const nuevasObservaciones = bloqueNotas
           ? [expExistente.observaciones_clinicas, bloqueNotas].filter(Boolean).join('\n')
           : expExistente.observaciones_clinicas
@@ -407,6 +436,7 @@ async function ejecutarFuncion(
 
         if (errUpd) return { error: `Error al actualizar expediente: ${errUpd.message}` }
       } else {
+        const nuevasIndicaciones = empaquetarRutinaEnIndicaciones(bloqueEjercicios ?? '', rutinaFijaAsignada)
         const { error: errIns } = await supabase
           .from('expedientes')
           .insert({
@@ -414,7 +444,7 @@ async function ejecutarFuncion(
             terapeuta_id: userId,
             diagnostico: args.zona_enfocada ? `Valoración y rehabilitación de ${args.zona_enfocada}` : 'En valoración fisioterapéutica',
             motivo_consulta: args.observaciones_clinicas || `Rehabilitación física (${args.zona_enfocada || 'General'})`,
-            indicaciones: bloqueEjercicios,
+            indicaciones: nuevasIndicaciones,
             observaciones_clinicas: bloqueNotas,
             estado: 'activo',
             fecha_apertura: new Date().toISOString(),
@@ -426,20 +456,12 @@ async function ejecutarFuncion(
       // 2. Si se asignaron ejercicios, registrarlos en `progreso_sesiones` para que el PACIENTE
       //    pueda verlos inmediatamente en su apartado `/paciente/ejercicios` ("Mis Ejercicios")
       let visibleEnPortalPaciente = false
-      if (args.ejercicios_asignados) {
-        // Parsear texto de ejercicios a formato JSONB [{ ejercicio, repeticiones }]
-        const itemsRaw = String(args.ejercicios_asignados)
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean)
-
-        const ejerciciosJson = itemsRaw.map(item => {
-          // Si viene ej. "Cuádriceps arco corto (3x15)" o "Sentadillas x12", extrae el último número como repeticiones
-          const matchReps = item.match(/[x×]\s*(\d+)/i) || item.match(/\((\d+)\s*(?:min|seg|rep|series)?\)/i)
-          const repeticiones = matchReps ? Math.max(1, parseInt(matchReps[1], 10)) : 10
-          const nombreLimpio = item.replace(/\s*\([^)]*\)\s*/g, '').replace(/\s*[x×]\s*\d+/gi, '').trim() || item
-          return { ejercicio: nombreLimpio, repeticiones }
-        })
+      if (rutinaFijaAsignada.length > 0) {
+        const ejerciciosJson = rutinaFijaAsignada.map(r => ({
+          ejercicio: r.ejercicio,
+          repeticiones: r.repeticiones,
+          modo_adaptado: r.modo_adaptado ?? false,
+        }))
 
         // Buscar una cita completada sin progreso previo, o la cita más reciente del paciente
         const { data: sesionesPrevias } = await supabase
@@ -603,8 +625,8 @@ function validarMensajeChatbot(mensaje: string): { valido: boolean; mensaje: str
   if (limpio === '') {
     return { valido: false, mensaje: 'El mensaje no puede estar vacío.' }
   }
-  if (limpio.length > 2000) {
-    return { valido: false, mensaje: 'El mensaje es demasiado largo.' }
+  if (limpio.length > 1000) {
+    return { valido: false, mensaje: 'El mensaje excede el límite máximo de 1000 caracteres permitido (Regla de Negocio HU #11).' }
   }
 
   const sanitizado = limpio.replace(/[\x00-\x1F\x7F]/g, '')

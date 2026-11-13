@@ -26,10 +26,10 @@ export default async function MiProgresoPage() {
 
   const idPaciente = paciente?.id_paciente ?? -1
 
-  // 2. Progreso de sesiones — columnas reales de la tabla
+  // 2. Progreso de sesiones — columnas reales de la tabla (incluye jsonb ejercicios)
   const { data: progreso } = await supabase
     .from('progreso_sesiones')
-    .select('id_progreso_sesion, cita_id, nivel_dolor, movilidad, ejercicios_completados, observaciones, fecha_registro')
+    .select('id_progreso_sesion, cita_id, nivel_dolor, movilidad, ejercicios, observaciones, fecha_registro')
     .eq('paciente_id', idPaciente)
     .order('fecha_registro', { ascending: true })
 
