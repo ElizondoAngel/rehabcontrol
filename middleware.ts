@@ -27,6 +27,11 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // ── APIs públicas (el resto de /api exige sesión válida) ──
+  const API_PUBLICAS = ['/api/auth/login', '/api/contacto', '/api/opiniones/publicas']
+  const esApi = pathname.startsWith('/api')
+  const esApiPublica = API_PUBLICAS.some(r => pathname === r || pathname.startsWith(r + '/'))
+
   // ── Rutas siempre públicas — salir ANTES de verificar sesión ──
   // Esto evita que visitantes nuevos queden atrapados en el login.
   // /auth/establecer-contrasena se carga SIN sesión todavía — la sesión
@@ -37,16 +42,18 @@ export async function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname === '/unauthorized' ||
     pathname === '/auth/establecer-contrasena' ||
-    pathname.startsWith('/api') ||
+    esApiPublica ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon')
   ) {
     return supabaseResponse
   }
 
-  // ── Verificar sesión solo para rutas protegidas ───────────────
+  // ── Verificar sesión para rutas protegidas ───────────────
+  // SEGURIDAD: getSession() no valida el JWT contra el servidor, por eso solo se
+  // permite en desarrollo local. En producción SIEMPRE se usa getUser().
   let user = null
-  if (process.env.NEXT_PUBLIC_OFFLINE_DEV === 'true') {
+  if (process.env.NEXT_PUBLIC_OFFLINE_DEV === 'true' && process.env.NODE_ENV !== 'production') {
     const { data: { session } } = await supabase.auth.getSession()
     user = session?.user ?? null
   } else {
@@ -54,9 +61,42 @@ export async function middleware(request: NextRequest) {
     user = authUser
   }
 
-  // Sin sesión → redirigir al login
+  // Sin sesión → API responde 401, páginas redirigen al login
   if (!user) {
+    if (esApi) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // ── Control de acceso por ROL en rutas de páginas (capa 1 de 3) ──
+  const RUTAS_POR_ROL: Array<{ prefijo: string; roles: string[] }> = [
+    { prefijo: '/admin', roles: ['admin'] },
+    { prefijo: '/secretaria', roles: ['secretaria', 'admin'] },
+    { prefijo: '/terapeuta', roles: ['terapeuta', 'admin'] },
+    { prefijo: '/paciente', roles: ['paciente', 'admin'] },
+  ]
+  const regla = RUTAS_POR_ROL.find(
+    r => pathname === r.prefijo || pathname.startsWith(r.prefijo + '/')
+  )
+
+  if (regla && !esApi) {
+    const { data: perfil } = await supabase
+      .from('profiles')
+      .select('rol, activo')
+      .eq('id', user.id)
+      .single()
+
+    // Cuenta inexistente o desactivada → fuera
+    if (!perfil || perfil.activo === false) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    // Rol sin permiso para esta sección
+    if (!regla.roles.includes(perfil.rol)) {
+      return NextResponse.redirect(new URL('/unauthorized', request.url))
+    }
   }
 
   return supabaseResponse

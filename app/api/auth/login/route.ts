@@ -17,9 +17,38 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const LoginSchema = z.object({
-  email: z.string().email('Correo inválido'),
-  password: z.string().min(1, 'La contraseña es obligatoria'),
+  email: z.string().email('Correo inválido').max(254),
+  password: z.string().min(1, 'La contraseña es obligatoria').max(200),
 })
+
+// ── Anti fuerza bruta: máximo 5 intentos fallidos por IP+correo cada 15 min ──
+const MAX_INTENTOS = 5
+const VENTANA_MS = 15 * 60 * 1000
+const intentosFallidos = new Map<string, { n: number; desde: number }>()
+
+function claveIntento(request: Request, email: string) {
+  const ip = (request.headers.get('x-forwarded-for') ?? 'local').split(',')[0].trim()
+  return `${ip}|${email.toLowerCase()}`
+}
+
+function estaBloqueado(clave: string) {
+  const r = intentosFallidos.get(clave)
+  if (!r) return false
+  if (Date.now() - r.desde > VENTANA_MS) {
+    intentosFallidos.delete(clave)
+    return false
+  }
+  return r.n >= MAX_INTENTOS
+}
+
+function registrarFallo(clave: string) {
+  const r = intentosFallidos.get(clave)
+  if (!r || Date.now() - r.desde > VENTANA_MS) {
+    intentosFallidos.set(clave, { n: 1, desde: Date.now() })
+  } else {
+    r.n += 1
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -30,13 +59,23 @@ export async function POST(request: Request) {
     }
     const { email, password } = parsed.data
 
+    const clave = claveIntento(request, email)
+    if (estaBloqueado(clave)) {
+      return NextResponse.json(
+        { error: 'Demasiados intentos fallidos. Intenta de nuevo en 15 minutos.' },
+        { status: 429 }
+      )
+    }
+
     const supabase = await createClient()
 
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError || !authData.user) {
+      registrarFallo(clave)
       return NextResponse.json({ error: 'Correo o contraseña incorrectos' }, { status: 401 })
     }
+    intentosFallidos.delete(clave)
 
     // ── Verificar que la cuenta esté activa ──────────────────────
     const { data: profile, error: profileError } = await supabase
