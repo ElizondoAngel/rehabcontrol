@@ -33,7 +33,10 @@ RehabControl reemplaza las agendas en papel y las hojas de cálculo dispersas po
 - Contratos y paquetes con pagos a plazos y saldo recalculado automáticamente
 - Sistema de opiniones/reseñas con moderación administrativa
 - Notificaciones in-app reutilizables en todos los módulos
-- Chatbot con IA (Google Gemini) para reporte de síntomas y agendado conversacional
+- Chatbot con IA (Google Gemini 2.5 Flash) para reporte de síntomas y agendado conversacional (secretaria y terapeuta)
+- Terapia Interactiva: el paciente practica sus ejercicios con la cámara y recibe evaluación de postura en tiempo real (MediaPipe, visión por computadora en el navegador)
+- Informe del expediente clínico en PDF con logo y marca de agua
+- Seguridad: control de acceso por rol en middleware, cabeceras HTTP de seguridad (CSP) y límite de intentos de login
 - Landing page pública con perfiles de terapeutas, instalaciones y paquetes
 
 ## Roles del sistema
@@ -43,7 +46,7 @@ RehabControl reemplaza las agendas en papel y las hojas de cálculo dispersas po
 | `admin` | 4 | Total — usuarios, paquetes, finanzas, reportes y moderación de opiniones |
 | `terapeuta` | 3 | Solo sus pacientes — agenda, expedientes, progreso de sesión |
 | `secretaria` | 2 | Citas, pagos y registro — aprueba citas, registra pagos |
-| `paciente` | 1 | Solo su información — agenda, historial, opiniones, chatbot |
+| `paciente` | 1 | Solo su información — agenda, historial, opiniones, chatbot, terapia interactiva |
 
 ## Requisitos previos
 
@@ -145,7 +148,7 @@ Proyecto desarrollado con **Scrum**, en 4 sprints de 2 semanas cada uno.
 | Sprint 1 | 16 – 29 septiembre 2026 | Autenticación, roles y agenda de citas |
 | Sprint 2 | 30 septiembre – 13 octubre 2026 | Expedientes, progreso y contratos/pagos |
 | Sprint 3 | 14 – 27 octubre 2026 | Opiniones, notificaciones y reportes |
-| Sprint 4 | 28 octubre – 20 noviembre 2026 | Chatbot IA, landing final e integración |
+| Sprint 4 | 28 octubre – 20 noviembre 2026 | Chatbot IA, Terapia Interactiva, landing final, seguridad e integración |
 
 **Planeación:** tablero en [GitHub Projects](https://github.com/users/ElizondoAngel/projects/1) con una historia de usuario por issue, un milestone por sprint y los campos Story Points y Responsable.
 
@@ -156,12 +159,14 @@ Proyecto desarrollado con **Scrum**, en 4 sprints de 2 semanas cada uno.
 
 | Integrante | Rol | Módulos principales |
 |---|---|---|
-| Butanda Montero Giovani | Developer | Módulo de Paciente (agendado y notificaciones), reportes |
-| Elizondo Sandoval Ángel Eduardo | Scrum Master / Líder | Autenticación, correos, opiniones, chatbot e integración a main |
-| Valverde Sánchez Felix Marlon | Developer | Expedientes clínicos, contratos y pagos, aprobación de citas, landing |
+| Butanda Montero Giovani | Developer | Módulo de Paciente (agendado de citas y notificaciones) |
+| Elizondo Sandoval Ángel Eduardo | Scrum Master / Líder | Módulos de Secretaria y Administrador (citas, contratos, pagos, reportes), autenticación, opiniones, landing, chatbot e integración a main |
+| Valverde Sánchez Felix Marlon | Developer | Módulo de Terapeuta (expediente clínico y progreso por sesión) |
 
 **Grupo:** ITIC-902M · UTN · 2026
 
 ## Licencia
 
 Proyecto académico desarrollado para la Universidad Tecnológica de Nezahualcóyotl.
+
+**Estado del backlog:** 23 historias de usuario y 115 story points, todos completados al cierre del Sprint 4.
